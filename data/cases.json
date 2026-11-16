@@ -1,0 +1,385 @@
+[
+  {
+    "stage": "done",
+    "steps": {
+      "nameCheck": {
+        "aadhaar": {
+          "name": "Deepak Verma",
+          "matched": true,
+          "files": []
+        },
+        "pan": {
+          "name": "Deepak Verma",
+          "matched": true,
+          "files": []
+        },
+        "passbook": {
+          "name": "Deepak Verma",
+          "matched": true,
+          "files": []
+        },
+        "bill": {
+          "name": "Deepak Verma",
+          "matched": true,
+          "files": []
+        },
+        "status": "done",
+        "submittedAt": "2026-11-16T07:56:26.218Z",
+        "submittedBy": "Admin"
+      },
+      "login": {
+        "loginCheck": "Login Done",
+        "images": [],
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:56:43.011Z",
+        "submittedBy": "Admin"
+      },
+      "siteSurvey": {
+        "customerName": "Deepak Verma",
+        "contactNumber": "9165931016",
+        "village": "Gitkera",
+        "surveyDate": "2026-11-16",
+        "surveyorName": "Vikas",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:56:59.637Z",
+        "submittedBy": "Admin"
+      },
+      "paymentWorkStart": {
+        "cashOrLoan": "Cash",
+        "workStatus": "Done",
+        "corridor": "Regular",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:57:16.174Z",
+        "submittedBy": "Admin"
+      },
+      "cashAskPayment": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:57:31.091Z",
+        "submittedBy": "Admin"
+      },
+      "cashPaymentReceived": {
+        "paymentReceived": "Yes",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:57:50.731Z",
+        "submittedBy": "Admin"
+      },
+      "cashDispatch": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:58:01.447Z",
+        "submittedBy": "Admin"
+      },
+      "assignInstaller": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "installerName": "Amit",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:58:26.037Z",
+        "submittedBy": "Admin"
+      },
+      "inspectionFile": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:58:37.007Z",
+        "submittedBy": "Admin"
+      },
+      "meterInspection": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:58:57.548Z",
+        "submittedBy": "Admin"
+      },
+      "generationWifi": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:59:06.769Z",
+        "submittedBy": "Admin"
+      },
+      "tariffCheck": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T07:59:15.398Z",
+        "submittedBy": "Admin"
+      }
+    },
+    "id": "C-0001",
+    "timestamp": "2026-11-16T07:56:05.950Z",
+    "bpScNumber": "1234567",
+    "customerName": "Deepak Verma",
+    "village": "Gitkera",
+    "productCode": "PMSG-3KW",
+    "branch": "Sarangarh",
+    "dealer": "Bantu Sahu",
+    "liaisoning": "Satya Kumar Sahu",
+    "route": "Raipur",
+    "dealAmount": 45000,
+    "schedule": {
+      "nameCheck": {
+        "timestamp": "2026-11-16T07:56:05.950Z",
+        "plannedDate": "2026-11-16T07:56:05.950Z",
+        "actualDate": "2026-11-16T07:56:26.218Z"
+      },
+      "login": {
+        "timestamp": "2026-11-16T07:56:26.218Z",
+        "plannedDate": "2026-11-16T07:56:26.218Z",
+        "actualDate": "2026-11-16T07:56:43.011Z"
+      },
+      "siteSurvey": {
+        "timestamp": "2026-11-16T07:56:43.011Z",
+        "plannedDate": "2026-11-16T07:56:43.011Z",
+        "actualDate": "2026-11-16T07:56:59.637Z"
+      },
+      "paymentWorkStart": {
+        "timestamp": "2026-11-16T07:56:59.637Z",
+        "plannedDate": "2026-11-16T07:56:59.637Z",
+        "actualDate": "2026-11-16T07:57:16.174Z"
+      },
+      "cashAskPayment": {
+        "timestamp": "2026-11-16T07:57:16.174Z",
+        "plannedDate": "2026-11-16T07:57:16.174Z",
+        "actualDate": "2026-11-16T07:57:31.091Z"
+      },
+      "cashPaymentReceived": {
+        "timestamp": "2026-11-16T07:57:31.091Z",
+        "plannedDate": "2026-11-16T07:57:31.091Z",
+        "actualDate": "2026-11-16T07:57:50.731Z"
+      },
+      "cashDispatch": {
+        "timestamp": "2026-11-16T07:57:50.731Z",
+        "plannedDate": "2026-11-16T07:57:50.731Z",
+        "actualDate": "2026-11-16T07:58:01.447Z"
+      },
+      "assignInstaller": {
+        "timestamp": "2026-11-16T07:58:01.447Z",
+        "plannedDate": "2026-11-16T07:58:01.447Z",
+        "actualDate": "2026-11-16T07:58:26.037Z"
+      },
+      "inspectionFile": {
+        "timestamp": "2026-11-16T07:58:26.037Z",
+        "plannedDate": "2026-11-16T07:58:26.037Z",
+        "actualDate": "2026-11-16T07:58:37.007Z"
+      },
+      "meterInspection": {
+        "timestamp": "2026-11-16T07:58:37.007Z",
+        "plannedDate": "2026-11-16T07:58:37.007Z",
+        "actualDate": "2026-11-16T07:58:57.548Z"
+      },
+      "generationWifi": {
+        "timestamp": "2026-11-16T07:58:57.548Z",
+        "plannedDate": "2026-11-16T07:58:57.548Z",
+        "actualDate": "2026-11-16T07:59:06.769Z"
+      },
+      "tariffCheck": {
+        "timestamp": "2026-11-16T07:59:06.769Z",
+        "plannedDate": "2026-11-16T07:59:06.769Z",
+        "actualDate": "2026-11-16T07:59:15.398Z"
+      }
+    }
+  },
+  {
+    "stage": "assignInstaller",
+    "steps": {
+      "nameCheck": {
+        "aadhaar": {
+          "name": "Muzammil",
+          "matched": true,
+          "files": []
+        },
+        "pan": {
+          "name": "Muzammil",
+          "matched": true,
+          "files": []
+        },
+        "passbook": {
+          "name": "Muzammil",
+          "matched": true,
+          "files": []
+        },
+        "bill": {
+          "name": "Muzammil",
+          "matched": true,
+          "files": []
+        },
+        "status": "done",
+        "submittedAt": "2026-11-16T08:00:10.607Z",
+        "submittedBy": "Admin"
+      },
+      "login": {
+        "loginCheck": "Login Done",
+        "images": [],
+        "remark": "Login Done",
+        "status": "done",
+        "submittedAt": "2026-11-16T08:00:24.216Z",
+        "submittedBy": "Admin"
+      },
+      "siteSurvey": {
+        "customerName": "Muzammil",
+        "contactNumber": "9165931016",
+        "village": "Kabir Nagar",
+        "surveyDate": "2026-11-16",
+        "surveyorName": "Amit Kumar",
+        "status": "done",
+        "submittedAt": "2026-11-16T08:00:41.640Z",
+        "submittedBy": "Admin"
+      },
+      "paymentWorkStart": {
+        "cashOrLoan": "Loan",
+        "workStatus": "Done",
+        "corridor": "Regular",
+        "status": "done",
+        "submittedAt": "2026-11-16T08:00:53.073Z",
+        "submittedBy": "Admin"
+      },
+      "bankFileReady": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T08:01:02.702Z",
+        "submittedBy": "Admin"
+      },
+      "loanIssue": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T08:01:10.998Z",
+        "submittedBy": "Admin"
+      },
+      "fileSubmission": {
+        "workStatus": "Done",
+        "remark": "Bank Testing",
+        "bank": "BOB",
+        "bankBranch": "Palari",
+        "bankQuotation": 20000,
+        "responsiblePerson": "Kishan",
+        "status": "done",
+        "submittedAt": "2026-11-16T08:01:37.797Z",
+        "submittedBy": "Admin"
+      },
+      "firstInstallment": {
+        "workStatus": "Done",
+        "remark": "Amount Receive Testing",
+        "amount": 5000,
+        "status": "done",
+        "submittedAt": "2026-11-16T08:01:57.098Z",
+        "submittedBy": "Admin"
+      },
+      "receiveDp": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "amount": 5000,
+        "status": "done",
+        "submittedAt": "2026-11-16T08:02:09.406Z",
+        "submittedBy": "Admin"
+      },
+      "dispatch": {
+        "workStatus": "Done",
+        "remark": "Testing",
+        "status": "done",
+        "submittedAt": "2026-11-16T08:02:17.607Z",
+        "submittedBy": "Admin"
+      }
+    },
+    "id": "C-0002",
+    "timestamp": "2026-11-16T08:00:03.729Z",
+    "bpScNumber": "987654",
+    "customerName": "Muzammil",
+    "village": "Kabir Nagar",
+    "productCode": "PMSG-5KW",
+    "branch": "Sarangarh",
+    "dealer": "Dev Kumar",
+    "liaisoning": "Khemdas",
+    "route": "Raipur",
+    "dealAmount": 35000,
+    "schedule": {
+      "nameCheck": {
+        "timestamp": "2026-11-16T08:00:03.729Z",
+        "plannedDate": "2026-11-16T08:00:03.729Z",
+        "actualDate": "2026-11-16T08:00:10.607Z"
+      },
+      "login": {
+        "timestamp": "2026-11-16T08:00:10.607Z",
+        "plannedDate": "2026-11-16T08:00:10.607Z",
+        "actualDate": "2026-11-16T08:00:24.216Z"
+      },
+      "siteSurvey": {
+        "timestamp": "2026-11-16T08:00:24.216Z",
+        "plannedDate": "2026-11-16T08:00:24.216Z",
+        "actualDate": "2026-11-16T08:00:41.640Z"
+      },
+      "paymentWorkStart": {
+        "timestamp": "2026-11-16T08:00:41.640Z",
+        "plannedDate": "2026-11-16T08:00:41.640Z",
+        "actualDate": "2026-11-16T08:00:53.073Z"
+      },
+      "bankFileReady": {
+        "timestamp": "2026-11-16T08:00:53.073Z",
+        "plannedDate": "2026-11-16T08:00:53.073Z",
+        "actualDate": "2026-11-16T08:01:02.702Z"
+      },
+      "loanIssue": {
+        "timestamp": "2026-11-16T08:01:02.702Z",
+        "plannedDate": "2026-11-16T08:01:02.702Z",
+        "actualDate": "2026-11-16T08:01:10.998Z"
+      },
+      "fileSubmission": {
+        "timestamp": "2026-11-16T08:01:10.998Z",
+        "plannedDate": "2026-11-16T08:01:10.998Z",
+        "actualDate": "2026-11-16T08:01:37.797Z"
+      },
+      "firstInstallment": {
+        "timestamp": "2026-11-16T08:01:37.797Z",
+        "plannedDate": "2026-11-16T08:01:37.797Z",
+        "actualDate": "2026-11-16T08:01:57.098Z"
+      },
+      "receiveDp": {
+        "timestamp": "2026-11-16T08:01:57.098Z",
+        "plannedDate": "2026-11-16T08:01:57.098Z",
+        "actualDate": "2026-11-16T08:02:09.406Z"
+      },
+      "dispatch": {
+        "timestamp": "2026-11-16T08:02:09.406Z",
+        "plannedDate": "2026-11-16T08:02:09.406Z",
+        "actualDate": "2026-11-16T08:02:17.607Z"
+      },
+      "assignInstaller": {
+        "timestamp": "2026-11-16T08:02:17.607Z",
+        "plannedDate": "2026-11-16T08:02:17.607Z",
+        "actualDate": null
+      }
+    }
+  },
+  {
+    "id": "C-0003",
+    "timestamp": "2026-11-16T09:04:44.943Z",
+    "leadId": "L-0001",
+    "bpScNumber": "986754",
+    "customerName": "Digendra Verma",
+    "village": "Saddu",
+    "productCode": "PMSG-3KW",
+    "branch": "Sarangarh",
+    "dealer": "Bantu Sahu",
+    "liaisoning": "Satya Kumar Sahu",
+    "route": "raipur",
+    "dealAmount": 45000,
+    "preferredPaymentMode": "Cash",
+    "leadSource": "CSEB / Bought Data",
+    "stage": "nameCheck",
+    "steps": {},
+    "schedule": {
+      "nameCheck": {
+        "timestamp": "2026-11-16T09:04:44.943Z",
+        "plannedDate": "2026-11-16T09:04:44.943Z",
+        "actualDate": null
+      }
+    }
+  }
+]

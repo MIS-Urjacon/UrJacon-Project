@@ -1,0 +1,34 @@
+{
+  "branch": [
+    "Sarangarh",
+    "Padampur",
+    "Bargarh",
+    "Sohela",
+    "Jharband",
+    "Saraipali"
+  ],
+  "dealer": [
+    "Bantu Sahu",
+    "Rohan",
+    "Sohan",
+    "Dev Kumar",
+    "Net Kumar"
+  ],
+  "liaisoning": [
+    "Satya Kumar Sahu",
+    "Khemdas"
+  ],
+  "productCode": [
+    "PMSG-3KW",
+    "PMSG-5KW"
+  ],
+  "bank": [],
+  "responsiblePerson": [
+    "Alok",
+    "Kishan",
+    "Pankaj",
+    "Mahesh",
+    "Akash"
+  ],
+  "installer": []
+}

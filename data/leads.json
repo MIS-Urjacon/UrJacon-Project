@@ -1,0 +1,60 @@
+[
+  {
+    "id": "L-0001",
+    "timestamp": "2026-11-16T09:02:51.998Z",
+    "updatedAt": "2026-11-16T09:04:44.943Z",
+    "status": "converted",
+    "lostReason": "",
+    "convertedCaseId": "C-0003",
+    "createdBy": "Admin",
+    "updatedBy": "Admin",
+    "followUps": [
+      {
+        "at": "2026-11-16T09:04:03.884Z",
+        "type": "Call",
+        "outcome": "",
+        "nextFollowUp": "2026-11-16T14:32",
+        "remark": "",
+        "by": "Admin"
+      },
+      {
+        "at": "2026-11-16T09:04:43.982Z",
+        "type": "Call",
+        "outcome": "",
+        "nextFollowUp": "2026-11-16T14:32",
+        "remark": "",
+        "by": "Admin"
+      }
+    ],
+    "customerName": "Digendra Verma",
+    "mobile": "1234567890",
+    "village": "Saddu",
+    "address": "Sadddu",
+    "bpScNumber": "986754",
+    "source": "CSEB / Bought Data",
+    "agent": "Vikas",
+    "monthlyBill": 1000,
+    "kwWanted": 3,
+    "productCode": "PMSG-3KW",
+    "paymentMode": "Cash",
+    "temperature": "Hot",
+    "nextFollowUp": "2026-11-16T14:32",
+    "outcome": "Testing",
+    "quotationReference": "Quotation",
+    "commission": 1000,
+    "branch": "Sarangarh",
+    "dealer": "Bantu Sahu",
+    "liaisoning": "Satya Kumar Sahu",
+    "route": "raipur",
+    "dealAmount": 45000,
+    "leadStage": "documentsReady",
+    "documents": {
+      "aadhaar": true,
+      "pan": true,
+      "passbook": true,
+      "bill": true,
+      "terracePhoto": false
+    },
+    "convertedAt": "2026-11-16T09:04:44.943Z"
+  }
+]
