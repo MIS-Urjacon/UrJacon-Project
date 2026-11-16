@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readCases, writeCases } from "@/lib/store";
+import { readCases, saveCase, removeCase } from "@/lib/store";
 
 const FIELDS = [
   "bpScNumber",
@@ -36,14 +36,12 @@ export async function PUT(request, { params }) {
   const updated = { ...cases[idx] };
   for (const f of FIELDS) updated[f] = (body[f] ?? "").toString().trim();
   updated.dealAmount = Number(body.dealAmount) || 0;
-  cases[idx] = updated;
-  await writeCases(cases);
+  await saveCase(updated);
   return NextResponse.json(updated);
 }
 
 export async function DELETE(_request, { params }) {
   const { id } = await params;
-  const cases = await readCases();
-  await writeCases(cases.filter((c) => c.id !== id));
+  await removeCase(id);
   return NextResponse.json({ ok: true });
 }

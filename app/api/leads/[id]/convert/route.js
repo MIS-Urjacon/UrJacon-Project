@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { readCases, writeCases } from "@/lib/store";
+import { readCases, saveCase } from "@/lib/store";
 import { buildCaseRecord } from "@/lib/caseRecord";
-import { hasCompletePacket, readLeads, writeLeads } from "@/lib/leads";
+import { hasCompletePacket, getLead, saveLead } from "@/lib/leads";
 import { getSession } from "@/lib/session";
 
 export async function POST(_request, { params }) {
   const { id } = await params;
-  const leads = await readLeads();
-  const lead = leads.find((row) => row.id === id);
+  const lead = await getLead(id);
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   if (lead.status === "converted") {
     return NextResponse.json({ error: "This lead is already converted" }, { status: 409 });
@@ -32,7 +31,6 @@ export async function POST(_request, { params }) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  cases.push(result.record);
   const user = await getSession();
   lead.status = "converted";
   lead.leadStage = "documentsReady";
@@ -40,7 +38,7 @@ export async function POST(_request, { params }) {
   lead.convertedAt = now;
   lead.updatedAt = now;
   lead.updatedBy = user?.name ?? "Unknown";
-  await writeCases(cases);
-  await writeLeads(leads);
+  await saveCase(result.record);
+  await saveLead(lead);
   return NextResponse.json({ lead, case: result.record }, { status: 201 });
 }

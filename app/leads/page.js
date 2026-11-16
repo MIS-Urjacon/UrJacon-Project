@@ -69,8 +69,8 @@ export default function LeadsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    const result = await response.json();
-    if (!response.ok) return result.error;
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return result.error ?? `Could not save the lead (server error ${response.status})`;
     setAddOpen(false);
     setTab("open");
     notify(`${result.id} added to the lead pipeline.`);

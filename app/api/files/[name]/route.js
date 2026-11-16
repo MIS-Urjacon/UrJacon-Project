@@ -1,6 +1,4 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { UPLOAD_DIR } from "@/lib/store";
+import { loadUpload } from "@/lib/db";
 
 const NAME_RE = /^[a-f0-9-]{36}\.(jpg|png|webp|gif|pdf)$/;
 const MIME = {
@@ -15,7 +13,8 @@ export async function GET(_request, { params }) {
   const { name } = await params;
   if (!NAME_RE.test(name)) return new Response("Not found", { status: 404 });
   try {
-    const buf = await fs.readFile(path.join(UPLOAD_DIR, name));
+    const buf = await loadUpload(name);
+    if (!buf) return new Response("Not found", { status: 404 });
     return new Response(buf, {
       headers: {
         "Content-Type": MIME[name.split(".").pop()],

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readUsers, writeUsers, hashPassword, publicUser } from "@/lib/users";
+import { readUsers, saveUser, removeUser, hashPassword, publicUser } from "@/lib/users";
 import { requireAdmin } from "@/lib/session";
 
 const ROLES = ["admin", "user"];
@@ -31,7 +31,7 @@ export async function PUT(request, { params }) {
   }
   Object.assign(user, { name, role, active: Boolean(active) });
   if (activeAdmins(users) < 1) return bad("At least one active admin is required");
-  await writeUsers(users);
+  await saveUser(user);
   return NextResponse.json(publicUser(user));
 }
 
@@ -43,6 +43,6 @@ export async function DELETE(_request, { params }) {
   const users = await readUsers();
   const rest = users.filter((u) => u.id !== id);
   if (activeAdmins(rest) < 1) return bad("At least one active admin is required");
-  await writeUsers(rest);
+  await removeUser(id);
   return NextResponse.json({ ok: true });
 }

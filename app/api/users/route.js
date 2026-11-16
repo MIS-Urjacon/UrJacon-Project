@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readUsers, writeUsers, hashPassword, publicUser } from "@/lib/users";
+import { readUsers, saveUser, hashPassword, publicUser } from "@/lib/users";
 import { requireAdmin } from "@/lib/session";
 
 const ROLES = ["admin", "user"];
@@ -44,7 +44,6 @@ export async function POST(request) {
     passwordHash: hashPassword(password),
     createdAt: new Date().toISOString(),
   };
-  users.push(user);
-  await writeUsers(users);
+  await saveUser(user);
   return NextResponse.json(publicUser(user), { status: 201 });
 }

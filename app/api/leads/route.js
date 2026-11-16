@@ -4,7 +4,7 @@ import {
   nextLeadId,
   readLeads,
   validateLead,
-  writeLeads,
+  saveLead,
 } from "@/lib/leads";
 import { getSession } from "@/lib/session";
 
@@ -42,7 +42,14 @@ export async function POST(request) {
     followUps: [],
     ...input,
   };
-  leads.push(record);
-  await writeLeads(leads);
+  try {
+    await saveLead(record);
+  } catch (e) {
+    console.error("saveLead failed:", e);
+    return NextResponse.json(
+      { error: "Could not save the lead. Please check the database settings and try again." },
+      { status: 500 }
+    );
+  }
   return NextResponse.json(record, { status: 201 });
 }

@@ -25,7 +25,8 @@ Decisions already made by the owner:
 
 - Next.js 16 (App Router), React 19, **JavaScript** (no TypeScript)
 - Tailwind CSS 4, `lucide-react` icons
-- Storage (dummy): JSON file + local upload folder. See section 8.
+- Storage: Supabase when configured, otherwise a local JSON file + upload folder
+  (dev). See section 8.
 
 Next.js 16 differences that already caused errors here:
 - Do **not** `export const dynamic = ...` in route files (`cacheComponents` is on).
@@ -342,10 +343,31 @@ No other file should need to change. If it does, the structure is wrong.
 
 - In `steps[key]` the field `status` is the pipeline result (`done`/`hold`).
   Do not name a form field `status` (Payment Work Start uses `workStatus`).
-- This is **not production storage**: no auth, no concurrency safety, does not
-  work on Vercel. The plan is to move to Supabase (database + file storage).
-  Only `lib/store.js` and `app/api/upload` + `app/api/files` should need to
-  change.
+- **Storage** has two modes, chosen by env vars (`.env.example`):
+  - **Supabase** (`SUPABASE_URL` + a key): real SQL tables with proper columns,
+    created by `supabase/schema.sql`. `lib/sql.js` maps rows <-> the same objects the
+    app always used, so API output is unchanged. Tables: `urjacon_cases` (case
+    columns), `urjacon_case_steps` (one row per submitted step; each step's form
+    answers are columns, unused ones NULL; file lists are jsonb), `urjacon_case_schedule`
+    (Timestamp / Planned / Actual per step), `urjacon_leads`, `urjacon_lead_followups`,
+    `urjacon_users`, `urjacon_masters` (one row per value). Private bucket
+    `urjacon-uploads` holds uploads. Each save writes only that case / lead / user.
+  - **Local JSON files** in `/data` (no env vars): dev only. On Vercel the disk is
+    read-only, so the Supabase vars are **required** there.
+- Code entry points: `lib/db.js` (connection, JSON fallback, uploads), `lib/store.js`
+  (`readCases/getCase/saveCase/removeCase`), `lib/leads.js`, `lib/users.js`,
+  `lib/masters.js`. Routes call `saveCase(row)` etc., never "write the whole list".
+  A new step field needs a column in `urjacon_case_steps` + an entry in `STEP_COLS`
+  (`lib/sql.js`); an unknown field is still kept in the row's `extra` jsonb.
+- Key: `SUPABASE_SERVICE_ROLE_KEY` is preferred (server-only, never `NEXT_PUBLIC_`).
+  The client demo runs with `SUPABASE_ANON_KEY`; `schema.sql` therefore opens the
+  tables and bucket to the anon role. **Demo only**: anyone with the URL + anon key
+  could read the tables, password hashes included. Before real use switch to the
+  service role key and run `supabase/revoke_anon_access.sql`.
+- Re-running `schema.sql` is safe. If old json-style tables exist they are renamed
+  `urjacon_*_json_old` and their data is copied into the new tables; drop the
+  `*_json_old` tables once you have checked the data.
+- Still no concurrency safety for two people editing the same record at once.
 
 ## 9. API
 

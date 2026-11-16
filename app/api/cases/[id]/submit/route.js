@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readCases, writeCases } from "@/lib/store";
+import { getCase, saveCase } from "@/lib/store";
 import { ALL_STEPS, TAT_DAYS, nextStage, newSchedule } from "@/lib/workflow";
 import { evaluate } from "@/lib/validate";
 import { getSession } from "@/lib/session";
@@ -12,8 +12,7 @@ export async function POST(request, { params }) {
   if (!ALL_STEPS.includes(step)) {
     return NextResponse.json({ error: "Unknown step" }, { status: 400 });
   }
-  const cases = await readCases();
-  const row = cases.find((c) => c.id === id);
+  const row = await getCase(id);
   if (!row) return NextResponse.json({ error: "Case not found" }, { status: 404 });
   if (row.stage !== step) {
     return NextResponse.json({ error: "This case is not at this step" }, { status: 409 });
@@ -38,6 +37,6 @@ export async function POST(request, { params }) {
     row.stage = next;
     if (next in TAT_DAYS) row.schedule[next] = newSchedule(next, now);
   }
-  await writeCases(cases);
+  await saveCase(row);
   return NextResponse.json(row);
 }

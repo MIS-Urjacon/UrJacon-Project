@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
-import { UPLOAD_DIR } from "@/lib/store";
+import { saveUpload } from "@/lib/db";
 
 const TYPES = {
   "image/jpeg": "jpg",
@@ -27,7 +25,11 @@ export async function POST(request) {
     return NextResponse.json({ error: "File is larger than 5 MB" }, { status: 413 });
   }
   const name = `${randomUUID()}.${ext}`;
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  await fs.writeFile(path.join(UPLOAD_DIR, name), Buffer.from(await file.arrayBuffer()));
+  try {
+    await saveUpload(name, Buffer.from(await file.arrayBuffer()), file.type);
+  } catch (e) {
+    console.error("upload failed:", e);
+    return NextResponse.json({ error: "Could not save the file. Please try again." }, { status: 500 });
+  }
   return NextResponse.json({ url: `/api/files/${name}`, name: file.name, type: file.type });
 }
