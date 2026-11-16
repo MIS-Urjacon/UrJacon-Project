@@ -1,0 +1,11 @@
+[
+  {
+    "id": "U-0001",
+    "username": "admin",
+    "name": "Admin",
+    "role": "admin",
+    "active": true,
+    "passwordHash": "d2437be3821c7090d5cc8a808ae57caf:ced3549b63c4dcfcc77fedf1798eabca35d4459e046ac0f0f0fd43d0362839629c4e582504ce66218285c815ecd63e1bfec4aeac54254f6ddca1c00e0a51092b",
+    "createdAt": "2026-11-15T19:15:12.600Z"
+  }
+]

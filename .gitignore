@@ -42,4 +42,3 @@ next-env.d.ts
 
 # uploaded files (dummy)
 /data/uploads
-/data/users.json
