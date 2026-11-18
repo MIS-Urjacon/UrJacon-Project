@@ -6,9 +6,11 @@ import {
   ChevronRight,
   Inbox,
   ClipboardCheck,
+  AlertTriangle,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { Pill, Toast, DateCell } from "@/components/ui";
+import IssueReportForm from "@/components/steps/IssueReportForm";
 import { STAGE_LABEL } from "@/lib/workflow";
 
 const PAGE_SIZE = 10;
@@ -38,6 +40,7 @@ export default function StepPage({
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(null); // { row, readOnly }
   const [toast, setToast] = useState("");
+  const [issueRow, setIssueRow] = useState(null); // case whose issue is being reported
 
   async function load() {
     setRows(await (await fetch("/api/cases", { cache: "no-store" })).json());
@@ -101,6 +104,21 @@ export default function StepPage({
         ? "Saved on hold. The case stays in Pending."
         : `Submitted. Moved to ${STAGE_LABEL[j.stage]}.`
     );
+    load();
+    return null;
+  }
+
+  // Report an issue: the case goes back to Document Verification & Name Check.
+  async function reportIssue(data) {
+    const res = await fetch(`/api/cases/${issueRow.id}/issue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const j = await res.json();
+    if (!res.ok) return j.error;
+    setIssueRow(null);
+    notify(`Issue reported. Case moved to ${STAGE_LABEL.nameCheck}.`);
     load();
     return null;
   }
@@ -207,12 +225,22 @@ export default function StepPage({
                     <tr key={r.id} className="group transition hover:bg-slate-50/70">
                       {tab === "pending" && (
                         <td className="sticky left-0 z-10 border-t border-slate-100 bg-white px-2.5 py-3.5 text-center shadow-[8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50">
-                          <button
-                            onClick={() => setModal({ row: r, readOnly: false })}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-dark"
-                          >
-                            <ClipboardCheck size={13} /> Update
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setModal({ row: r, readOnly: false })}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+                            >
+                              <ClipboardCheck size={13} /> Update
+                            </button>
+                            {stepKey !== "nameCheck" && (
+                              <button
+                                onClick={() => setIssueRow(r)}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                              >
+                                <AlertTriangle size={13} /> Report Issue
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                       <td className={td}>
@@ -313,6 +341,24 @@ export default function StepPage({
             readOnly={modal.readOnly}
             onSubmit={submit}
             onCancel={() => setModal(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={!!issueRow}
+        onClose={() => setIssueRow(null)}
+        title="Report Issue"
+        subtitle={issueRow ? `${issueRow.customerName} · ${issueRow.bpScNumber}` : ""}
+        maxWidth="max-w-2xl"
+      >
+        {issueRow && (
+          <IssueReportForm
+            key={issueRow.id}
+            row={issueRow}
+            stepKey={stepKey}
+            onSubmit={reportIssue}
+            onCancel={() => setIssueRow(null)}
           />
         )}
       </Modal>

@@ -5,7 +5,7 @@ import { CheckCircle2, XCircle, Copy } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
-import { NAME_DOCS, normName } from "@/lib/workflow";
+import { NAME_DOCS, STAGE_LABEL, normName } from "@/lib/workflow";
 import QuotationSummary from "@/components/leads/QuotationSummary";
 
 export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
@@ -74,6 +74,21 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
   return (
     <form onSubmit={submit} className="space-y-5">
       <CaseSummary row={row} />
+      {row.issue?.open && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <div className="font-semibold">Issue reported from {row.issue.fromLabel}: {row.issue.type}</div>
+          <div className="mt-1">{row.issue.description}</div>
+          <div className="mt-1 text-xs text-rose-600">By {row.issue.reportedBy} · {new Date(row.issue.reportedAt).toLocaleString("en-IN")}</div>
+          {row.issue.files?.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-3 text-xs">
+              {row.issue.files.map((f) => (
+                <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="font-semibold underline">{f.name}</a>
+              ))}
+            </div>
+          )}
+          <div className="mt-1 text-xs">Resolve it here; the case then returns to {STAGE_LABEL[row.issue.fromStep]}.</div>
+        </div>
+      )}
       <QuotationSummary quotation={row} title="Quotation Received from Lead Management" />
       <fieldset disabled={readOnly}>
         <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -223,7 +238,9 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
           }`}
         >
           {allProper
-            ? "All 4 documents are proper. This case will move to Login PMSG."
+            ? row.issue?.open
+              ? `All 4 documents are proper. The issue will be resolved and the case returns to ${STAGE_LABEL[row.issue.fromStep]}.`
+              : "All 4 documents are proper. This case will move to Login PMSG."
             : anyCorrection
             ? `Correction required for ${correctionDocuments.join(", ")}. Record the details; the case will remain here.`
             : "Upload each received document, enter its printed name, and complete the document check."}
@@ -235,7 +252,7 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
         onCancel={onCancel}
         saving={saving}
         error={err}
-        submitLabel={allProper ? "Submit & send to Login PMSG" : "Save correction required (hold)"}
+        submitLabel={allProper ? (row.issue?.open ? "Resolve issue & return" : "Submit & send to Login PMSG") : "Save correction required (hold)"}
       />
     </form>
   );

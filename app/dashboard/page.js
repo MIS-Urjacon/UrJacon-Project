@@ -251,13 +251,24 @@ function summarize(leads, cases, asOf) {
   const activeLoanCases = activeCases.filter((row) => paymentMode(row) === "Loan");
   const activeCashCases = activeCases.filter((row) => paymentMode(row) === "Cash");
   const groupCounts = Object.fromEntries(GROUPS.map((group) => [group.key, activeCases.filter((row) => group.stages.includes(row.stage)).length]));
-  const leadStageCounts = Object.fromEntries(["new", "contacted", "quotation", "documentsReady"].map((stage) => [stage, openLeads.filter((lead) => lead.leadStage === stage).length]));
+  // A sent quotation returns the lead to Call Tracker, so "Quotation sent" counts by quotation status;
+  // leads still awaiting or revising a quotation stay under "Contacted".
+  const quotationSent = (lead) => lead.quotationStatus === "sent" && ["contacted", "quotation"].includes(lead.leadStage);
+  const leadStageCounts = {
+    new: openLeads.filter((lead) => lead.leadStage === "new").length,
+    contacted: openLeads.filter((lead) => ["contacted", "quotation"].includes(lead.leadStage) && !quotationSent(lead)).length,
+    quotation: openLeads.filter(quotationSent).length,
+    documentsReady: openLeads.filter((lead) => lead.leadStage === "documentsReady").length,
+  };
   const temperatureCounts = Object.fromEntries(["Hot", "Warm", "Cold"].map((temperature) => [temperature, openLeads.filter((lead) => lead.temperature === temperature).length]));
 
+  // A reported issue sits at Document Verification; it is listed once, as an issue.
+  const hasOpenIssue = (row) => Boolean(row.issue?.open);
   const priorities = [
     ...dueLeads.map((lead) => ({ key: `lead-${lead.id}`, type: "Follow-up due", color: "rose", title: lead.customerName, meta: `${lead.id} · ${lead.mobile}`, time: lead.nextFollowUp, href: "/leads" })),
-    ...holdCases.map((row) => ({ key: `hold-${row.id}`, type: "On hold", color: "amber", title: row.customerName, meta: `${row.id} · ${STAGE_LABEL[row.stage]}`, time: row.steps?.[row.stage]?.submittedAt, href: stageHref(row.stage) })),
-    ...overdueCases.filter((row) => !holdCases.some((hold) => hold.id === row.id)).map((row) => ({ key: `overdue-${row.id}`, type: "Past planned date", color: "red", title: row.customerName, meta: `${row.id} · ${STAGE_LABEL[row.stage]}`, time: row.schedule?.[row.stage]?.plannedDate, href: stageHref(row.stage) })),
+    ...activeCases.filter(hasOpenIssue).map((row) => ({ key: `issue-${row.id}`, type: "Open issue", color: "rose", title: row.customerName, meta: `${row.id} · ${row.issue.type} · from ${row.issue.fromLabel}`, time: row.issue.reportedAt, href: stageHref("nameCheck") })),
+    ...holdCases.filter((row) => !hasOpenIssue(row)).map((row) => ({ key: `hold-${row.id}`, type: "On hold", color: "amber", title: row.customerName, meta: `${row.id} · ${STAGE_LABEL[row.stage]}`, time: row.steps?.[row.stage]?.submittedAt, href: stageHref(row.stage) })),
+    ...overdueCases.filter((row) => !hasOpenIssue(row) && !holdCases.some((hold) => hold.id === row.id)).map((row) => ({ key: `overdue-${row.id}`, type: "Past planned date", color: "red", title: row.customerName, meta: `${row.id} · ${STAGE_LABEL[row.stage]}`, time: row.schedule?.[row.stage]?.plannedDate, href: stageHref(row.stage) })),
   ].sort((a, b) => new Date(a.time || 0) - new Date(b.time || 0));
 
   const leadActivity = leads.map((lead) => ({ key: `lead-${lead.id}-${lead.updatedAt}`, title: lead.status === "converted" ? "Lead converted to case" : lead.status === "lost" ? "Lead marked lost" : "Lead updated", detail: lead.status === "open" ? LEAD_STAGE_LABEL[lead.leadStage] : lead.status, customer: lead.customerName, reference: lead.id, owner: lead.updatedBy || lead.createdBy, time: lead.updatedAt || lead.timestamp, href: "/leads" }));

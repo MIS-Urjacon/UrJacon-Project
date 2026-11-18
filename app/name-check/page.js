@@ -3,6 +3,7 @@ import StepPage from "@/components/StepPage";
 import NameCheckForm from "@/components/steps/NameCheckForm";
 import { CustomerCell, RoutePill } from "@/components/ui";
 import { Stack, money, OUT, CARRY } from "@/components/stepColumns";
+import { Pill } from "@/components/ui";
 
 const columns = [
   { label: "Customer", cell: (row) => <CustomerCell row={row} /> },
@@ -13,6 +14,20 @@ const columns = [
   { label: "Dealer / Liaisoning", cell: (row) => <Stack top={row.dealer} bottom={row.liaisoning} /> },
   { label: "Route", cell: (row) => <RoutePill route={row.route} /> },
   ...CARRY.nameCheck,
+  {
+    label: "Issue Report",
+    cell: (row) =>
+      row.issue ? (
+        <div className="max-w-64 whitespace-normal">
+          <Pill color={row.issue.open ? "red" : "green"}>{row.issue.open ? "Issue open" : "Resolved"}</Pill>
+          <div className="mt-1 font-semibold text-slate-700">{row.issue.type} · {row.issue.fromLabel}</div>
+          <div className="text-xs text-slate-500">{row.issue.description}</div>
+          <div className="text-xs text-slate-400">By {row.issue.reportedBy}</div>
+        </div>
+      ) : (
+        "-"
+      ),
+  },
 ];
 
 export default function NameCheckPage() {

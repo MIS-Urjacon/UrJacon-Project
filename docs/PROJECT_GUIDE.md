@@ -250,6 +250,18 @@ with the link"). The sheet has Who / How / When per step:
 - Workflow version 2 cases follow all newly added steps. Historical completed
   cases remain completed so a deployment does not unexpectedly reopen them.
 
+### Issue Report (every step after Document Verification)
+
+- Every step page except Document Verification has a **Report Issue** button next to
+  Update in the Pending tab (`components/steps/IssueReportForm.js`, shown by `StepPage`).
+  Fields: Issue Type (`lib/issues.js`), Issue Details, optional files.
+- `POST /api/cases/[id]/issue` stores `row.issue` (latest) and `row.issues` (history) in
+  the case `extra` jsonb (no new column), moves the case to `nameCheck` and resets its
+  schedule. The Document Verification page shows an **Issue Report** column and a banner
+  in the popup. `lib/store.js` does not auto-advance a case that has an open issue.
+- Submitting Document Verification as Done resolves the issue and returns the case to
+  the step it was reported from (`issue.fromStep`), not to Login.
+
 BP SC Number remains unique across all converted cases.
 
 ## 4. Dates: Timestamp, Planned Date, Actual Date

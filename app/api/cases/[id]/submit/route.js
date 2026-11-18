@@ -38,7 +38,14 @@ export async function POST(request, { params }) {
   };
   if (!result.hold) {
     // Actual Date for this step; Timestamp + Planned Date for the next one.
-    const next = nextStage(step, row);
+    let next = nextStage(step, row);
+    // Document Verification finished for a reported issue: resolve it and go back to the step it came from.
+    if (step === "nameCheck" && row.issue?.open) {
+      next = row.issue.fromStep;
+      const resolved = { ...row.issue, open: false, resolvedAt: now, resolvedBy: row.steps[step].submittedBy };
+      row.issues = (row.issues ?? []).map((i) => (i.reportedAt === resolved.reportedAt ? resolved : i));
+      row.issue = resolved;
+    }
     row.schedule = { ...row.schedule, [step]: { ...row.schedule?.[step], actualDate: now } };
     row.stage = next;
     if (next in TAT_DAYS) row.schedule[next] = newSchedule(next, now);
