@@ -17,7 +17,7 @@ export default function PaymentWorkStartPage() {
     <StepPage
       stepKey="paymentWorkStart"
       title="Payment Work Start"
-      subtitle="Step 5 · Confirm Cash or Loan, the work status and the corridor for cases that finished the site survey."
+      subtitle="After Site Survey · Start the payment process by confirming Cash or Loan, work status and corridor."
       columns={columns}
       historyColumns={OUT.paymentWorkStart}
       Form={PaymentWorkStartForm}

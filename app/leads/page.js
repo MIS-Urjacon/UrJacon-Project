@@ -44,12 +44,16 @@ export default function LeadsPage() {
   }, []);
 
   const counts = useMemo(
-    () => Object.fromEntries(TABS.map(([key]) => [key, rows.filter((row) => row.status === key).length])),
+    () => Object.fromEntries(TABS.map(([key]) => [
+      key,
+      rows.filter((row) => row.status === key && (key !== "open" || row.leadStage === "new")).length,
+    ])),
     [rows]
   );
   const filtered = useMemo(
     () => rows
       .filter((row) => row.status === tab)
+      .filter((row) => tab !== "open" || row.leadStage === "new")
       .filter((row) => JSON.stringify(row).toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => (b.updatedAt ?? b.timestamp).localeCompare(a.updatedAt ?? a.timestamp)),
     [rows, tab, query]
@@ -83,23 +87,14 @@ export default function LeadsPage() {
     const response = await fetch(`/api/leads/${modal.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, action: action === "convert" ? "save" : action }),
+      body: JSON.stringify({ ...data, action }),
     });
     const result = await response.json();
     if (!response.ok) return result.error;
 
-    if (action === "convert") {
-      const conversion = await fetch(`/api/leads/${modal.id}/convert`, { method: "POST" });
-      const converted = await conversion.json();
-      if (!conversion.ok) return converted.error;
-      setModal(null);
-      setTab("converted");
-      notify(`${modal.id} confirmed. Case ${converted.case.id} is now pending at Name Check.`);
-    } else {
-      setModal(null);
-      setTab(result.status);
-      notify(action === "lost" ? "Lead marked as lost." : action === "reopen" ? "Lead reopened." : "Lead updated.");
-    }
+    setModal(null);
+    setTab(result.status);
+    notify(action === "lost" ? "Lead marked as lost." : action === "reopen" ? "Lead reopened." : "Lead updated.");
     load();
     return null;
   }
@@ -110,7 +105,7 @@ export default function LeadsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Lead Management</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Step 1 · Capture, follow up and qualify leads. Only confirmed leads with documents enter the solar process.
+            Step 1 · Capture a new lead. Calling and qualification continue in Call Tracker.
           </p>
         </div>
         <Button onClick={() => setAddOpen(true)}><Plus size={16} /> Add lead</Button>

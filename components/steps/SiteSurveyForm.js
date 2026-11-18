@@ -7,10 +7,12 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
   const prev = row.steps?.siteSurvey;
   const [f, setF] = useState({
     customerName: prev?.customerName ?? row.customerName ?? "",
-    contactNumber: prev?.contactNumber ?? "",
+    contactNumber: prev?.contactNumber ?? row.mobile ?? "",
     village: prev?.village ?? row.village ?? "",
     surveyDate: prev?.surveyDate ?? "",
     surveyorName: prev?.surveyorName ?? "",
+    smartMeterPresent: prev?.smartMeterPresent ?? "",
+    materialNeeded: prev?.materialNeeded ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -46,6 +48,8 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
               onChange={(e) => set("customerName", e.target.value)}
             />
           </label>
+          <label className="block"><Label required>Smart Meter Present?</Label><select className="field" required disabled={readOnly} value={f.smartMeterPresent} onChange={(e) => set("smartMeterPresent", e.target.value)}><option value="">Select</option><option>Yes</option><option>No</option></select></label>
+          <label className="block sm:col-span-2"><Label required>Material Needed / Survey Report</Label><textarea rows={3} className="field !h-auto py-2.5" required disabled={readOnly} value={f.materialNeeded} onChange={(e) => set("materialNeeded", e.target.value)} /></label>
           <label className="block">
             <Label required>Contact Number</Label>
             <input

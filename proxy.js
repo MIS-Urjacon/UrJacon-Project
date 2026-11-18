@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { COOKIE_NAME, readSession } from "@/lib/auth";
+import { canAccessPage, slugOf } from "@/lib/access";
 
 // First line of defence: everything except the login page and login API needs a
 // valid session cookie. Route handlers re-check the user where it matters
@@ -24,6 +25,11 @@ export async function proxy(request) {
   }
   if (pathname.startsWith("/settings") && session.r !== "admin") {
     return NextResponse.redirect(new URL("/", request.url));
+  }
+  // Role-based page access (see lib/access.js). Pages only; API routes re-check themselves.
+  const slug = slugOf(pathname);
+  if (!isApi && slug && !canAccessPage({ role: session.r, pages: session.p }, slug)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   return NextResponse.next();
 }

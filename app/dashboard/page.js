@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
+  ArrowRight,
   BadgeIndianRupee,
   CheckCircle2,
   Clock3,
@@ -16,15 +17,24 @@ import {
   Wrench,
 } from "lucide-react";
 import { DateCell, Pill } from "@/components/ui";
-import { CASH_FLOW, FLOW, INSTALL_FLOW, LOAN_FLOW, STAGE_LABEL, TAT_DAYS } from "@/lib/workflow";
+import { CASH_FLOW, CLOSURE_FLOW, FLOW, INSTALL_FLOW, LOAN_FLOW, STAGE_LABEL, TAT_DAYS } from "@/lib/workflow";
 import { LEAD_STAGE_LABEL } from "@/lib/leadConstants";
 import { STEPS } from "@/lib/steps";
 
 const GROUPS = [
-  { key: "process", label: "Core process", hint: "Name check to payment decision", stages: FLOW, icon: FolderKanban, color: "bg-sky-500" },
+  { key: "process", label: "Core process", hint: "Documents → PMSG → survey → payment", stages: FLOW, icon: FolderKanban, color: "bg-sky-500" },
   { key: "loan", label: "Loan process", hint: "Bank file to dispatch", stages: LOAN_FLOW, icon: Landmark, color: "bg-indigo-500" },
-  { key: "cash", label: "Cash process", hint: "Payment gate to dispatch", stages: CASH_FLOW, icon: BadgeIndianRupee, color: "bg-amber-500" },
+  { key: "cash", label: "Cash process", hint: "Payment collection and approval", stages: CASH_FLOW.filter((stage) => stage !== "cashReceipt"), icon: BadgeIndianRupee, color: "bg-amber-500" },
+  { key: "payment", label: "Payment gate", hint: "Cheque documents and signed receipt", stages: ["subsidyChequeReady", "cashReceipt"], icon: BadgeIndianRupee, color: "bg-orange-500" },
   { key: "installation", label: "Installation", hint: "Installer to tariff check", stages: INSTALL_FLOW, icon: Wrench, color: "bg-violet-500" },
+  { key: "closure", label: "Closure", hint: "Warranty and final handover", stages: CLOSURE_FLOW, icon: CheckCircle2, color: "bg-emerald-500" },
+];
+
+const CORE_FLOW = [
+  { label: "Document Verification", note: "All documents proper", href: "/name-check" },
+  { label: "Login PMSG", note: "Login completed", href: "/login-pmsg" },
+  { label: "Site Survey", note: "Site and contact captured", href: "/site-survey" },
+  { label: "Payment Work Start", note: "Cash or Loan selected", href: "/payment-work-start" },
 ];
 
 function fetchDashboardData() {
@@ -120,6 +130,7 @@ export default function DashboardPage() {
             </div>
             <Pill color="blue">{dashboard.totalLiveWork} live items</Pill>
           </div>
+          <CoreFlow />
           <div className="mt-6 space-y-5">
             <PipelineRow icon={UsersRound} label="Lead qualification" hint="Open leads before confirmation" count={dashboard.openLeads.length} total={dashboard.totalLiveWork} color="bg-brand" href="/leads" />
             {GROUPS.map((group) => (
@@ -193,6 +204,30 @@ export default function DashboardPage() {
           {!loading && dashboard.recentActivity.length === 0 && <div className="py-12 text-center text-sm text-slate-400">Activity will appear when leads and cases are updated.</div>}
         </div>
       </section>
+    </div>
+  );
+}
+
+function CoreFlow() {
+  return (
+    <div className="mt-5 rounded-xl border border-sky-100 bg-sky-50/50 p-3">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sky-700">Required core handoff</div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+        {CORE_FLOW.map((item, index) => (
+          <div key={item.href} className="contents">
+            <Link href={item.href} className="min-w-0 flex-1 rounded-lg bg-white px-3 py-2.5 ring-1 ring-sky-100 transition hover:ring-sky-300">
+              <div className="text-xs font-semibold text-slate-700">{index + 1}. {item.label}</div>
+              <div className="mt-0.5 text-[11px] text-slate-400">{item.note}</div>
+            </Link>
+            {index < CORE_FLOW.length - 1 && (
+              <span className="flex items-center justify-center text-sky-400" aria-hidden="true">
+                <ArrowRight size={16} className="rotate-90 sm:rotate-0" />
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 text-xs text-sky-700">Site Survey details continue with the case and are shown again at Dispatch.</div>
     </div>
   );
 }

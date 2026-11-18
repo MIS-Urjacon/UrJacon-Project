@@ -5,22 +5,37 @@ import FileUpload from "@/components/FileUpload";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 import { NAME_DOCS, normName } from "@/lib/workflow";
+import QuotationSummary from "@/components/leads/QuotationSummary";
 
 export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
   const prev = row.steps?.nameCheck;
   const [docs, setDocs] = useState(() =>
     Object.fromEntries(
-      NAME_DOCS.map(([k]) => [k, { name: prev?.[k]?.name ?? "", files: prev?.[k]?.files ?? [] }])
+      NAME_DOCS.map(([k]) => [k, {
+        name: prev?.[k]?.name ?? "",
+        files: prev?.[k]?.files ?? [],
+        reviewStatus: prev?.[k]?.reviewStatus
+          ?? prev?.documentReviews?.[k]
+          ?? (prev?.[k] ? (prev[k].matched ? "Proper" : "Correction Required") : ""),
+      }])
     )
   );
+  const [systemType, setSystemType] = useState(prev?.systemType ?? "");
+  const [correctionType, setCorrectionType] = useState(prev?.correctionType ?? "");
+  const [correctionReason, setCorrectionReason] = useState(prev?.correctionReason ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const ref = normName(row.customerName);
   const state = (k) =>
     !docs[k].name.trim() ? "empty" : normName(docs[k].name) === ref ? "match" : "mismatch";
-  const allMatch = NAME_DOCS.every(([k]) => state(k) === "match");
-  const anyMismatch = NAME_DOCS.some(([k]) => state(k) === "mismatch");
+  const needsCorrection = (k) =>
+    state(k) === "mismatch" || docs[k].reviewStatus === "Correction Required";
+  const allProper = NAME_DOCS.every(
+    ([k]) => state(k) === "match" && docs[k].reviewStatus === "Proper"
+  );
+  const anyCorrection = NAME_DOCS.some(([k]) => needsCorrection(k));
+  const correctionDocuments = NAME_DOCS.filter(([k]) => needsCorrection(k)).map(([, label]) => label);
 
   const set = (k, patch) => setDocs({ ...docs, [k]: { ...docs[k], ...patch } });
 
@@ -37,8 +52,20 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
     setErr("");
     const missing = NAME_DOCS.find(([k]) => state(k) === "empty");
     if (missing) return setErr(`Enter the name on the ${missing[1]}`);
+    const missingFile = NAME_DOCS.find(([k]) => docs[k].files.length === 0);
+    if (missingFile) return setErr(`Upload the received ${missingFile[1]}`);
+    const unreviewed = NAME_DOCS.find(([k]) => !docs[k].reviewStatus);
+    if (unreviewed) return setErr(`Mark the ${unreviewed[1]} as proper or correction required`);
+    if (!systemType) return setErr("Select Tata or Non-Tata system type");
+    if (anyCorrection && !correctionType) return setErr("Select the required correction type");
+    if (anyCorrection && !correctionReason.trim()) return setErr("Enter the correction reason");
     setSaving(true);
-    const msg = await onSubmit(docs);
+    const msg = await onSubmit({
+      ...docs,
+      systemType,
+      correctionType: anyCorrection ? correctionType : "",
+      correctionReason: anyCorrection ? correctionReason : "",
+    });
     setSaving(false);
     if (msg) setErr(msg);
   }
@@ -46,6 +73,23 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
   return (
     <form onSubmit={submit} className="space-y-5">
       <CaseSummary row={row} />
+      <QuotationSummary quotation={row} title="Quotation Received from Lead Management" />
+      <fieldset disabled={readOnly}>
+        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Verification details
+        </legend>
+        <label className="block max-w-sm">
+          <Label required>System Type</Label>
+          <select className="field" value={systemType} onChange={(event) => setSystemType(event.target.value)}>
+            <option value="">Select</option>
+            <option value="Tata">Tata</option>
+            <option value="Non-Tata">Non-Tata</option>
+          </select>
+        </label>
+        <p className="mt-2 text-xs text-slate-500">
+          The reference process requires the system to be marked Tata or Non-Tata during document verification.
+        </p>
+      </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-500">
           The name on every document must match <b className="text-slate-800">{row.customerName}</b>.
@@ -61,30 +105,59 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
         )}
       </div>
 
+      {anyCorrection && (
+        <fieldset disabled={readOnly} className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-amber-700">
+            Correction required
+          </legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label>
+              <Label required>Correction Type</Label>
+              <select className="field" value={correctionType} onChange={(event) => setCorrectionType(event.target.value)}>
+                <option value="">Select</option>
+                <option value="Document Correction">Document Correction</option>
+                <option value="Name Correction">Name Correction</option>
+                <option value="Owner Change">Owner Change</option>
+                <option value="New PAN">New PAN</option>
+              </select>
+            </label>
+            <label>
+              <Label required>Correction Reason</Label>
+              <input className="field" value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} />
+            </label>
+          </div>
+          <p className="mt-3 text-xs text-amber-700">
+            Correction needed in: <b>{correctionDocuments.join(", ")}</b>. The case stays here until
+            corrected documents are received and every document is marked proper.
+          </p>
+        </fieldset>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         {NAME_DOCS.map(([k, label]) => {
           const s = state(k);
+          const correction = needsCorrection(k);
           return (
             <div
               key={k}
               className={`rounded-xl border p-4 ${
-                s === "match"
+                s === "match" && docs[k].reviewStatus === "Proper"
                   ? "border-emerald-200 bg-emerald-50/40"
-                  : s === "mismatch"
+                  : correction
                   ? "border-rose-200 bg-rose-50/40"
                   : "border-slate-200"
               }`}
             >
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-sm font-semibold">{label}</span>
-                {s === "match" && (
+                {s === "match" && docs[k].reviewStatus === "Proper" && (
                   <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                    <CheckCircle2 size={14} /> Matches
+                    <CheckCircle2 size={14} /> Proper
                   </span>
                 )}
-                {s === "mismatch" && (
+                {correction && (
                   <span className="flex items-center gap-1 text-xs font-semibold text-rose-600">
-                    <XCircle size={14} /> Mismatch
+                    <XCircle size={14} /> Correction required
                   </span>
                 )}
               </div>
@@ -106,6 +179,33 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
                   readOnly={readOnly}
                 />
               </div>
+              <fieldset disabled={readOnly} className="mt-3">
+                <Label required>Document Check</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["Proper", "Correction Required"].map((value) => (
+                    <label
+                      key={value}
+                      className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                        docs[k].reviewStatus === value
+                          ? value === "Proper"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                            : "border-rose-300 bg-rose-50 text-rose-700"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`${k}-review-status`}
+                        value={value}
+                        checked={docs[k].reviewStatus === value}
+                        onChange={() => set(k, { reviewStatus: value })}
+                        className="accent-[var(--color-brand)]"
+                      />
+                      {value === "Proper" ? "Proper" : "Needs correction"}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
             </div>
           );
         })}
@@ -114,18 +214,18 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
       {!readOnly && (
         <div
           className={`rounded-lg px-4 py-3 text-sm ${
-            allMatch
+            allProper
               ? "bg-emerald-50 text-emerald-800"
-              : anyMismatch
+              : anyCorrection
               ? "bg-amber-50 text-amber-800"
               : "bg-slate-50 text-slate-500"
           }`}
         >
-          {allMatch
-            ? "All 4 documents match. This case will move to Login PMSG."
-            : anyMismatch
-            ? "Name mismatch found. Submitting will keep the case on hold until it is corrected."
-            : "Enter the name shown on each document."}
+          {allProper
+            ? "All 4 documents are proper. This case will move to Login PMSG."
+            : anyCorrection
+            ? `Correction required for ${correctionDocuments.join(", ")}. Record the details; the case will remain here.`
+            : "Upload each received document, enter its printed name, and complete the document check."}
         </div>
       )}
 
@@ -134,7 +234,7 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
         onCancel={onCancel}
         saving={saving}
         error={err}
-        submitLabel={anyMismatch ? "Save as mismatch (hold)" : "Submit & send to Login PMSG"}
+        submitLabel={allProper ? "Submit & send to Login PMSG" : "Save correction required (hold)"}
       />
     </form>
   );

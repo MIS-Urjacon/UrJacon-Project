@@ -1,8 +1,19 @@
 import { NextResponse } from "next/server";
 import { readUsers, saveUser, hashPassword, publicUser } from "@/lib/users";
 import { requireAdmin } from "@/lib/session";
+import { ROLE_KEYS, GRANTABLE_PAGES, defaultPages } from "@/lib/access";
 
-const ROLES = ["admin", "user"];
+const ROLES = ROLE_KEYS;
+
+// Custom page list: an array of grantable slugs. Returns null when it equals the role's
+// default (so the user keeps following the role), or false when invalid.
+function cleanPages(input, role) {
+  if (input == null) return null;
+  if (!Array.isArray(input) || input.some((p) => !GRANTABLE_PAGES.includes(p))) return false;
+  const list = GRANTABLE_PAGES.filter((p) => input.includes(p));
+  const def = defaultPages(role);
+  return list.length === def.length && list.every((p) => def.includes(p)) ? null : list;
+}
 
 export async function GET() {
   const auth = await requireAdmin();
@@ -30,6 +41,8 @@ export async function POST(request) {
   if (password.length < 6) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
   }
+  const pages = cleanPages(b.pages, b.role);
+  if (pages === false) return NextResponse.json({ error: "Invalid page list" }, { status: 400 });
   const users = await readUsers();
   if (users.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
     return NextResponse.json({ error: "This username already exists" }, { status: 409 });
@@ -41,6 +54,7 @@ export async function POST(request) {
     name,
     role: b.role,
     active: true,
+    ...(pages ? { pages } : {}),
     passwordHash: hashPassword(password),
     createdAt: new Date().toISOString(),
   };

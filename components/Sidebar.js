@@ -5,10 +5,13 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, Search, Sun, Settings } from "lucide-react";
 import { STEPS } from "@/lib/steps";
 import { useMe } from "@/lib/useMe";
+import { canAccessPage } from "@/lib/access";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const me = useMe();
+  // Only the pages this role may open; group headings follow the visible steps.
+  const steps = me ? STEPS.filter((s) => canAccessPage(me, s.slug)) : STEPS;
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
       <div className="flex h-16 items-center gap-3 border-b border-slate-100 px-6">
@@ -51,12 +54,12 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
-        {STEPS.map((s, i) => {
+        {steps.map((s, i) => {
           const active = pathname === `/${s.slug}`;
           const Icon = s.icon;
           return (
             <Fragment key={s.slug}>
-            {s.group !== STEPS[i - 1]?.group && (
+            {s.group !== steps[i - 1]?.group && (
               <div
                 className={`px-3 pb-2 text-[11px] font-semibold tracking-[0.12em] text-slate-400 ${
                   i === 0 ? "pt-7" : "pt-6"

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { ROLE_LABEL } from "@/lib/access";
 import { CalendarDays, Bell, LogOut } from "lucide-react";
 import { useMe } from "@/lib/useMe";
 
@@ -49,7 +50,7 @@ export default function Topbar() {
           </div>
           <div className="hidden leading-tight lg:block">
             <div className="text-sm font-semibold">{me?.name ?? " "}</div>
-            <div className="text-xs capitalize text-slate-400">{me?.role ?? " "}</div>
+            <div className="text-xs text-slate-400">{ROLE_LABEL[me?.role] ?? me?.role ?? " "}</div>
           </div>
         </div>
         <button

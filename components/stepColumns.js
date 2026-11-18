@@ -133,6 +133,29 @@ export const C = {
   },
   // Name Check
   names: { label: "Names on Documents", cell: (r) => <Names row={r} /> },
+  verification: {
+    label: "Verification",
+    cell: (r) => {
+      const verification = step(r, "nameCheck");
+      if (!verification) return dash;
+      return (
+        <div className="leading-tight">
+          <Pill color={verification.verificationResult === "Verified" ? "green" : "amber"}>
+            {verification.verificationResult}
+          </Pill>
+          <div className="mt-1 text-xs text-slate-500">{verification.systemType || "-"}</div>
+          {verification.correctionType && (
+            <div className="mt-1 max-w-[180px] text-xs text-amber-700" title={verification.correctionReason}>
+              {verification.correctionDocuments?.length > 0 && (
+                <span className="block font-semibold">{verification.correctionDocuments.join(", ")}</span>
+              )}
+              {verification.correctionType}: {verification.correctionReason}
+            </div>
+          )}
+        </div>
+      );
+    },
+  },
   // Site Survey
   contact: {
     label: "Contact / Surveyor",
@@ -141,6 +164,22 @@ export const C = {
   surveyDate: {
     label: "Survey Date",
     cell: (r) => (step(r, "siteSurvey") ? day(step(r, "siteSurvey").surveyDate) : dash),
+  },
+  surveyDispatch: {
+    label: "Survey Site / Contact",
+    cell: (r) => {
+      const survey = step(r, "siteSurvey");
+      if (!survey) return dash;
+      return (
+        <div className="max-w-[220px] leading-tight">
+          <div className="font-medium text-slate-700">{survey.village || r.village || "-"}</div>
+          <div className="mt-1 text-xs text-slate-500">{survey.contactNumber || "-"}</div>
+          <div className="mt-0.5 text-xs text-slate-400">
+            {survey.surveyorName || "-"} · {survey.surveyDate ? day(survey.surveyDate) : "-"}
+          </div>
+        </div>
+      );
+    },
   },
   // Payment Work Start
   cashLoan: {
@@ -200,12 +239,47 @@ export const C = {
     label: "Installer Name",
     cell: (r) => step(r, "assignInstaller")?.installerName || dash,
   },
+  warrantyBalance: {
+    label: "Balance Recovery",
+    cell: (r) => {
+      const w = step(r, "warranty");
+      if (!w) return dash;
+      return (
+        <div className="leading-tight">
+          <Pill color={w.balanceStatus === "Cleared" ? "green" : "red"}>{w.balanceStatus}</Pill>
+          <div className="mt-1 text-xs text-slate-400">
+            Due {money(w.balanceDue)} · Recovered {money(w.balanceRecovered)}
+          </div>
+        </div>
+      );
+    },
+  },
+  warrantyDetail: {
+    label: "Warranty",
+    cell: (r) => {
+      const w = step(r, "warranty");
+      if (!w?.warrantyType) return dash;
+      const detail = w.warrantyType === "Tata"
+        ? w.tataWarrantyReference
+        : `Panel DCR: ${w.panelWarrantyDcr} · Inverter: ${w.inverterRegistration}`;
+      return <Stack top={w.warrantyType} bottom={detail} />;
+    },
+  },
+  warrantyHandover: {
+    label: "Warranty Date / Handover",
+    cell: (r) => {
+      const w = step(r, "warranty");
+      return w?.warrantyDate
+        ? <Stack top={day(w.warrantyDate)} bottom={`Handover kit: ${w.handoverKitGiven}`} />
+        : dash;
+    },
+  },
 };
 
 // Each step's own submitted data (History tab).
 export const OUT = {
   login: [C.loginDetail],
-  nameCheck: [C.names],
+  nameCheck: [C.verification, C.names],
   siteSurvey: [C.contact, C.surveyDate],
   paymentWorkStart: [C.cashLoan],
   bankFileReady: [remarkCol("bankFileReady")],
@@ -223,11 +297,12 @@ export const OUT = {
   meterInspection: [remarkCol("meterInspection", "Working Remarks")],
   generationWifi: [remarkCol("generationWifi", "Working Remarks")],
   tariffCheck: [remarkCol("tariffCheck")],
+  warranty: [C.warrantyBalance, C.warrantyDetail, C.warrantyHandover, remarkCol("warranty")],
 };
 
 // Important data from earlier steps, shown on the page of the step that needs it.
 export const CARRY = {
-  login: [C.names],
+  login: [C.verification, C.names],
   nameCheck: [],
   siteSurvey: [C.dealerLiaison],
   paymentWorkStart: [C.routeAmount, C.contact, C.surveyDate],
@@ -236,14 +311,15 @@ export const CARRY = {
   fileSubmission: [C.cashLoan, C.routeAmount],
   firstInstallment: [C.bankInfo, C.quotation, C.routeAmount],
   receiveDp: [C.bankInfo, C.quotation, C.firstAmount],
-  dispatch: [C.quotation, C.firstAmount, C.dpAmount],
+  dispatch: [C.surveyDispatch, C.quotation, C.firstAmount, C.dpAmount],
   cashAskPayment: [C.contact, C.dealNinety],
   cashPaymentReceived: [C.dealNinety, remarkCol("cashAskPayment", "Ask Payment Remark")],
   cashApproval: [C.dealNinety, C.payRecv],
-  cashDispatch: [C.dealNinety, C.payRecv, C.approver],
+  cashDispatch: [C.surveyDispatch, C.dealNinety, C.payRecv, C.approver],
   assignInstaller: [C.contact, C.cashLoan],
   inspectionFile: [C.installer],
   meterInspection: [C.installer],
   generationWifi: [C.installer, C.contact],
   tariffCheck: [],
+  warranty: [C.cashLoan, C.installer],
 };

@@ -3,6 +3,7 @@ import { getCase, saveCase } from "@/lib/store";
 import { ALL_STEPS, TAT_DAYS, nextStage, newSchedule } from "@/lib/workflow";
 import { evaluate } from "@/lib/validate";
 import { getSession } from "@/lib/session";
+import { canSubmitStep } from "@/lib/access";
 
 // Submit one pipeline step for a case. On success the case moves to the next
 // stage and the step's data is kept as that step's history.
@@ -11,6 +12,11 @@ export async function POST(request, { params }) {
   const { step, data } = await request.json();
   if (!ALL_STEPS.includes(step)) {
     return NextResponse.json({ error: "Unknown step" }, { status: 400 });
+  }
+  const me = await getSession();
+  if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!canSubmitStep(me, step)) {
+    return NextResponse.json({ error: "Your role cannot update this step" }, { status: 403 });
   }
   const row = await getCase(id);
   if (!row) return NextResponse.json({ error: "Case not found" }, { status: 404 });

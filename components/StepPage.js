@@ -308,6 +308,7 @@ export default function StepPage({
         {modal && (
           <Form
             key={modal.row.id}
+            stepKey={stepKey}
             row={modal.row}
             readOnly={modal.readOnly}
             onSubmit={submit}

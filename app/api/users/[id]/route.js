@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { readUsers, saveUser, removeUser, hashPassword, publicUser } from "@/lib/users";
 import { requireAdmin } from "@/lib/session";
+import { ROLE_KEYS, GRANTABLE_PAGES, defaultPages } from "@/lib/access";
 
-const ROLES = ["admin", "user"];
+const ROLES = ROLE_KEYS;
+
+// Same rule as POST /api/users: null = follow the role, false = invalid.
+function cleanPages(input, role) {
+  if (input == null) return null;
+  if (!Array.isArray(input) || input.some((p) => !GRANTABLE_PAGES.includes(p))) return false;
+  const list = GRANTABLE_PAGES.filter((p) => input.includes(p));
+  const def = defaultPages(role);
+  return list.length === def.length && list.every((p) => def.includes(p)) ? null : list;
+}
 const bad = (error, status = 400) => NextResponse.json({ error }, { status });
 
 // Keep at least one active admin so nobody can lock everyone out.
@@ -30,6 +40,11 @@ export async function PUT(request, { params }) {
     user.passwordHash = hashPassword(String(b.password));
   }
   Object.assign(user, { name, role, active: Boolean(active) });
+  if ("pages" in b) {
+    const pages = cleanPages(b.pages, role);
+    if (pages === false) return bad("Invalid page list");
+    user.pages = pages;
+  }
   if (activeAdmins(users) < 1) return bad("At least one active admin is required");
   await saveUser(user);
   return NextResponse.json(publicUser(user));

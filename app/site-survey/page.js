@@ -17,7 +17,7 @@ export default function SiteSurveyPage() {
     <StepPage
       stepKey="siteSurvey"
       title="Site Survey"
-      subtitle="Step 4 · Record the survey for cases that finished the login."
+      subtitle="Step 8 · Starts only after Login PMSG is completed. Capture the site and contact details required again at Dispatch."
       columns={columns}
       historyColumns={OUT.siteSurvey}
       Form={SiteSurveyForm}

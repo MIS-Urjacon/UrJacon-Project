@@ -5,8 +5,16 @@ import Modal from "@/components/Modal";
 import { Avatar, Button, Pill, Toast } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
 import { useMe } from "@/lib/useMe";
+import { ROLE_LABEL, GRANTABLE_PAGES, defaultPages } from "@/lib/access";
+import { STEPS } from "@/lib/steps";
 
-const EMPTY = { name: "", username: "", role: "user", password: "", active: true };
+const EMPTY = { name: "", username: "", role: "user", password: "", active: true, pages: defaultPages("user") };
+// Grantable pages grouped for the checkbox list, in sidebar order.
+const PAGE_GROUPS = STEPS.filter((s) => GRANTABLE_PAGES.includes(s.slug)).reduce((acc, s) => {
+  (acc[s.group] ??= []).push(s);
+  return acc;
+}, {});
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
 const th = "px-2 py-3 align-bottom text-[11px] font-semibold uppercase leading-tight tracking-wider";
 const td = "whitespace-nowrap border-t border-slate-100 px-2 py-3.5";
 
@@ -40,7 +48,7 @@ export default function UsersTab() {
     setModal({ mode: "add" });
   }
   function openEdit(u) {
-    setForm({ name: u.name, username: u.username, role: u.role, password: "", active: u.active });
+    setForm({ name: u.name, username: u.username, role: u.role, password: "", active: u.active, pages: u.pages ?? defaultPages(u.role) });
     setErr("");
     setModal({ mode: "edit", user: u });
   }
@@ -84,13 +92,14 @@ export default function UsersTab() {
       </div>
 
       <div className="overflow-x-auto border-t border-slate-100">
-        <table className="w-full min-w-[700px] border-separate border-spacing-0 text-left text-[13px]">
+        <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-[13px]">
           <thead>
             <tr className="bg-slate-50 text-slate-500">
               <th className={`${th} text-center`}>Action</th>
               <th className={th}>Name</th>
               <th className={th}>Username</th>
               <th className={th}>Role</th>
+              <th className={th}>Page access</th>
               <th className={th}>Status</th>
               <th className={th}>Created</th>
             </tr>
@@ -98,7 +107,7 @@ export default function UsersTab() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="border-t border-slate-100 px-4 py-4">
+                <td colSpan={7} className="border-t border-slate-100 px-4 py-4">
                   <div className="skeleton h-5 w-full" />
                 </td>
               </tr>
@@ -124,7 +133,16 @@ export default function UsersTab() {
                 </td>
                 <td className={`${td} font-mono text-[13px] font-medium text-slate-700`}>{u.username}</td>
                 <td className={td}>
-                  <Pill color={u.role === "admin" ? "blue" : "gray"}>{u.role === "admin" ? "Admin" : "User"}</Pill>
+                  <Pill color={u.role === "admin" ? "blue" : "gray"}>{ROLE_LABEL[u.role] ?? u.role}</Pill>
+                </td>
+                <td className={td}>
+                  {u.role === "admin" ? (
+                    <span className="text-slate-500">All pages + Settings</span>
+                  ) : u.pages ? (
+                    <Pill color="amber">Custom · {u.pages.length} pages</Pill>
+                  ) : (
+                    <span className="text-slate-500">Role default · {defaultPages(u.role).length} pages</span>
+                  )}
                 </td>
                 <td className={td}>
                   <Pill color={u.active ? "green" : "red"}>{u.active ? "Active" : "Inactive"}</Pill>
@@ -143,7 +161,7 @@ export default function UsersTab() {
         onClose={() => setModal(null)}
         title={editing ? "Edit user" : "Add user"}
         subtitle={editing ? `${modal.user.name} · ${modal.user.username}` : "Create a new account."}
-        maxWidth="max-w-xl"
+        maxWidth="max-w-3xl"
       >
         {modal && (
           <form onSubmit={save} className="space-y-6">
@@ -162,9 +180,14 @@ export default function UsersTab() {
               <label className="block">
                 <Label required>Role</Label>
                 <select className="field" disabled={isSelf} value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="user">User (steps only)</option>
+                  onChange={(e) => setForm({ ...form, role: e.target.value, pages: defaultPages(e.target.value) })}>
+                  <option value="user">User (all steps)</option>
                   <option value="admin">Admin (steps + Settings)</option>
+                  {Object.entries(ROLE_LABEL)
+                    .filter(([k]) => k !== "admin" && k !== "user")
+                    .map(([k, label]) => (
+                      <option key={k} value={k}>{label} (own pages only)</option>
+                    ))}
                 </select>
               </label>
               <label className="block">
@@ -185,6 +208,52 @@ export default function UsersTab() {
                 </label>
               )}
             </div>
+            {form.role !== "admin" && (
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <Label>Page access</Label>
+                  <div className="flex items-center gap-3 text-xs font-semibold">
+                    {!sameSet(form.pages, defaultPages(form.role)) && (
+                      <Pill color="amber">Custom (differs from role)</Pill>
+                    )}
+                    <button type="button" className="text-brand-dark hover:underline"
+                      onClick={() => setForm({ ...form, pages: defaultPages(form.role) })}>Role default</button>
+                    <button type="button" className="text-brand-dark hover:underline"
+                      onClick={() => setForm({ ...form, pages: [...GRANTABLE_PAGES] })}>Select all</button>
+                    <button type="button" className="text-slate-500 hover:underline"
+                      onClick={() => setForm({ ...form, pages: [] })}>Clear</button>
+                  </div>
+                </div>
+                <p className="mb-3 text-xs text-slate-400">
+                  Ticked pages are checked from the role. Tick or untick to give this user more or less access.
+                  Dashboard, Reports and Process Reference are always available.
+                </p>
+                <div className="max-h-72 space-y-4 overflow-y-auto rounded-xl border border-slate-200 p-4">
+                  {Object.entries(PAGE_GROUPS).map(([group, items]) => (
+                    <div key={group}>
+                      <div className="mb-1.5 text-[11px] font-semibold tracking-[0.12em] text-slate-400">{group}</div>
+                      <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                        {items.map((s) => (
+                          <label key={s.slug} className="flex items-center gap-2 text-sm text-slate-700">
+                            <input type="checkbox" className="h-4 w-4 accent-[var(--color-brand)]"
+                              checked={form.pages.includes(s.slug)}
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  pages: e.target.checked
+                                    ? [...form.pages, s.slug]
+                                    : form.pages.filter((p) => p !== s.slug),
+                                })
+                              } />
+                            {s.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <FormActions
               onCancel={() => setModal(null)}
               saving={saving}

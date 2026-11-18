@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { cleanLeadInput, getLead, validateLead, saveLead, removeLead } from "@/lib/leads";
 import { getSession, requireAdmin } from "@/lib/session";
+import { requireLeadWriter } from "@/lib/session";
 
 export async function PUT(request, { params }) {
+  const guard = await requireLeadWriter();
+  if (guard.error) return guard.error;
   const { id } = await params;
   const body = await request.json();
   const input = cleanLeadInput(body);
@@ -45,6 +48,8 @@ export async function PUT(request, { params }) {
   const updated = {
     ...current,
     ...input,
+    // The staff owner is assigned at creation from the authenticated session.
+    agent: current.agent || user?.name || "Unknown",
     status: action === "lost" ? "lost" : "open",
     lostReason: action === "lost" ? lostReason : "",
     updatedAt: now,

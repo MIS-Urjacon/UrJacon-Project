@@ -18,7 +18,7 @@ export default function LoginPmsgPage() {
     <StepPage
       stepKey="login"
       title="Login PMSG"
-      subtitle="Step 3 · Fill the Login Check in PMSG for cases that passed the name check. Login Done moves the case to Site Survey."
+      subtitle="Step 7 · Log in to PMSG with the consumer OTP only after document verification and any required correction are complete."
       columns={columns}
       historyColumns={OUT.login}
       Form={LoginForm}

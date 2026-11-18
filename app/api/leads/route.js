@@ -6,13 +6,15 @@ import {
   validateLead,
   saveLead,
 } from "@/lib/leads";
-import { getSession } from "@/lib/session";
+import { getSession, requireLeadWriter } from "@/lib/session";
 
 export async function GET() {
   return NextResponse.json(await readLeads());
 }
 
 export async function POST(request) {
+  const guard = await requireLeadWriter();
+  if (guard.error) return guard.error;
   const input = cleanLeadInput(await request.json());
   const error = validateLead(input);
   if (error) return NextResponse.json({ error }, { status: 400 });
@@ -41,6 +43,8 @@ export async function POST(request) {
     updatedBy: user?.name ?? "Unknown",
     followUps: [],
     ...input,
+    // Never trust a client-entered staff name. Lead ownership comes from the session.
+    agent: user?.name ?? "Unknown",
   };
   try {
     await saveLead(record);

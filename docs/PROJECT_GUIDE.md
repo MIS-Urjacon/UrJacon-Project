@@ -37,24 +37,72 @@ Next.js 16 differences that already caused errors here:
 
 ## 3. The pipeline
 
+### Current reference-aligned flow (authoritative)
+
+The live workflow is defined only in `lib/workflow.js`; route components must
+not hard-code the next step. The current sequence is:
+
+1. **Intake:** Lead -> Call Tracker -> Quotation & Documents.
+2. **Verification:** Document Verification & Name Check -> Login PMSG -> Site
+   Survey -> Payment Work Start. A correction keeps the case and its data on
+   Document Verification; Login is opened only after every required document
+   is marked Proper.
+3. **Payment branch:**
+   - **Loan:** Agreement -> JanSamarth -> Bank File Ready -> Bank Submission ->
+     Loan Issue Resolution -> First Installment -> DP -> Accounts Cash Receipt
+     -> Dispatch.
+   - **Cash:** Ask 90% -> Payment Received check -> conditional Director
+     Approval -> Accounts Cash Receipt -> Cash Dispatch.
+   - **Subsidy Cheque (Odisha only):** Subsidy Cheque Documents -> Accounts
+     Cash Receipt -> Cash Dispatch.
+4. **Installation and inspection:** Assign Installer -> Installation Evidence
+   -> Bill & DCR -> Portal Installation Submission -> Inspection File -> Meter
+   Installation -> JE Inspection -> Generation & Wi-Fi -> Portal Inspection
+   Approval -> Tariff Check.
+5. **Closure:** Loan cases first complete Final Bank File and Final Bank
+   Payment. All modes then complete Subsidy Redeem -> Subsidy Disbursal ->
+   (Subsidy Cheque Deposit for that mode) -> Balance Clearance -> Warranty &
+   Handover -> Completed.
+
+Site Survey is deliberately before Payment Work Start, and its material/report
+data is carried forward to Dispatch. The payment, dispatch, installation,
+inspection and closure gates follow the design reference business rules. The
+complete rule/hold/role/document glossary is visible in the app at
+`/process-reference`; live operational summaries are at `/reports`.
+
 ### Lead management (before the case process)
 
-The `/leads` page is Stage A and the application home page. Leads are stored
-separately from cases in `data/leads.json` because they may be open or lost
-without ever receiving a BP / SC Number or entering operations.
+Stage A is split into three operational pages. Leads are stored separately from
+cases in `data/leads.json` because they may be open or lost without ever
+receiving a BP / SC Number or entering operations.
 
-- **New lead:** Customer Name, Mobile Number and Lead Source are required.
-  The form also captures village/address, agent or field staff, monthly bill,
-  required kW, product, expected Cash/Loan mode, quotation reference, deal
-  amount, commission, temperature and the next follow-up.
-- **Follow-up:** Each update can append a Call / Visit / WhatsApp entry with
-  outcome, remark, user and next follow-up. Lead stage is New, Contacted,
-  Quotation Sent or Documents Ready. Temperature is Hot / Warm / Cold.
+- **Lead (`/leads`, Step 1):** Customer Name, Mobile Number and Lead Source are
+  required. It captures the source/customer details, browser live location
+  (latitude, longitude, accuracy and capture time) and initial requirement.
+  Agent / Field Staff is not typed by the user; the API stores the signed-in
+  user's name from the authenticated session.
+- **Call Tracker (`/call-tracker`, Step 2):** Each Call / Visit / WhatsApp entry
+  records customer response, remark, user, temperature and next call time.
+  Call-back stays here; an interested customer moves to Quotation. Document
+  receipt is not decided here.
+- **Quotation & Documents (`/quotation`, Step 3):** Captures quotation reference,
+  entity, system type, DCR/NDCR, On-grid/Hybrid, kW, price and subsidy. The
+  system generates a printable quotation preview from these fields; supporting
+  images/PDFs are optional Storage attachments. The quotation is first saved as
+  a draft and then sent. A sent quotation can be revised only after recording a
+  reason; the original and every sent R1/R2 version remain in revision history.
+  `POST
+  /api/leads/[id]/send-quotation` is the delivery integration point: it records
+  manual delivery now and will send the WhatsApp message when that integration
+  is connected. Only after send are the three customer responses available:
+  **Call Back Later** returns the lead to Call Tracker, **Document Given**
+  completes the packet and moves it to Name Check, and **Not Interested** stops
+  the lead.
 - **Lost:** A reason is compulsory. Lost leads stay in history and can be
   reopened.
-- **Confirmed:** BP / SC Number, Cash/Loan mode and Aadhaar, PAN, Passbook and
-  Electricity Bill checkboxes are compulsory. Confirmation links a
-  new case through `leadId`; the case starts at Name Check. The expected
+- **Handover to Document Verification & Name Check:** Quotation reference, BP / SC Number, Cash/Loan mode
+  and Aadhaar, PAN, Passbook and Electricity Bill are compulsory. Handover links
+  a new case through `leadId`; the case starts at Name Check. The expected
   payment mode is carried as a preference and pre-selected at Payment Work
   Start, where it can still be corrected.
 - The Leads page has Open / Converted / Lost tabs, search and pagination.
@@ -65,10 +113,15 @@ Defined in `lib/workflow.js` (`FLOW`). A case is in exactly one **stage**.
 
 | # | Step key | Page (route) | Popup fields | Moves on when | Next |
 |---|----------|--------------|--------------|---------------|------|
-| 1 | `nameCheck` | `/name-check` | Name on Aadhaar, PAN, Passbook, Bijli Bill (+ optional file each) | All 4 names match the customer name | Login PMSG |
-| 2 | `login` | `/login-pmsg` | Login Check in PMSG (Login Done / Login Hold), images (up to 5), remark | Login Done | Site Survey |
-| 3 | `siteSurvey` | `/site-survey` | Customer Name, Contact Number, Village (address), Survey Date, Surveyor Name | Valid submit | Payment Work Start |
-| 4 | `paymentWorkStart` | `/payment-work-start` | Cash or Loan, Status (Done / Not Done), Corridor (Regular / Special) | Status = Done | **Loan** goes to Bank File Ready. **Cash** goes to Ask 90% Payment for Dispatch |
+| 4–6 | `nameCheck` | `/name-check` | Received Aadhaar, PAN, Passbook and Bijli Bill files; name and Proper/Correction Required check on each; Tata/Non-Tata; correction type and reason | All 4 documents are saved, names match and every document is marked Proper; otherwise correction hold | Login PMSG |
+| 7 | `login` | `/login-pmsg` | Login Check in PMSG (Login Done / Login Hold), images (up to 5), remark | Login Done | Site Survey |
+| 8 | `siteSurvey` | `/site-survey` | Customer Name, Contact Number, Village (address), Survey Date, Surveyor Name | Valid submit | Payment Work Start |
+| After 8 | `paymentWorkStart` | `/payment-work-start` | Cash or Loan, Status (Done / Not Done), Corridor (Regular / Special) | Status = Done | **Loan** goes to Bank File Ready. **Cash** goes to Ask 90% Payment for Dispatch |
+
+The core handoff is strictly sequential: **Document Verification → Login PMSG →
+Site Survey → Payment Work Start**. The Site Survey address, contact number,
+surveyor and survey date remain attached to the case and are displayed on both
+Loan Dispatch and Cash Dispatch pages.
 
 ### Loan process (after Payment Work Start = Loan)
 
@@ -106,7 +159,7 @@ columns.
 Defined in `INSTALL_FLOW` in `lib/workflow.js`. Sidebar group "INSTALLATION".
 From the owner's Installation Google Sheet (tab "FMS"; its Config tab says
 working hours 10:00-18:00, Sunday off). Both Loan and Cash cases enter here after
-their Dispatch; the last step ends the case (`done`).
+their Dispatch; after Tariff Code Check they move to Closure.
 
 | # | Step key | Page (route) | Who | How | When (sheet) | Popup fields |
 |---|----------|--------------|-----|-----|--------------|--------------|
@@ -127,6 +180,28 @@ their Dispatch; the last step ends the case (`done`).
   not used.
 - The "When" numbers are **working hours** (confirmed by the Config tab). TAT
   is still not applied (`TAT_DAYS` all 0).
+
+### Closure (after Tariff Code Check)
+
+Defined in `CLOSURE_FLOW` in `lib/workflow.js`. Sidebar group "CLOSURE".
+
+| # | Step key | Page (route) | Moves on when | Next |
+|---|----------|--------------|---------------|------|
+| 31 | `warranty` (Warranty & Handover) | `/warranty` | Balance cleared, warranty complete and customer handover kit given | Completed |
+
+- Balance Status is Cleared / Pending. Pending requires a remark, blocks
+  warranty/document handover and keeps the case on hold.
+- Balance Clearance shows the case Deal Amount as the total collectible amount.
+  The user records the total received amount and the system calculates the
+  remaining balance. Any remaining amount automatically saves H22 and keeps the
+  case at Balance Clearance; only zero remaining balance opens Warranty.
+- Warranty Type is Tata / Non-Tata. Tata requires a Tata Warranty Reference.
+  Non-Tata requires Panel Warranty through DCR and Inverter Online Registration
+  to both be Done.
+- Warranty Date cannot be in the future. Customer Handover Kit Given must be
+  Yes; the kit contains warranty documents, invoice and consumer-vendor agreement.
+- Existing cases that reached Completed before this step was added move to
+  Warranty Pending through the normal `lib/store.js` normalization rule.
 
 ### Cash process (after Payment Work Start = Cash)
 
@@ -158,18 +233,17 @@ with the link"). The sheet has Who / How / When per step:
   Cash step 2 has its own form (`components/steps/PaymentReceivedForm.js`).
   Cash pages use `components/CashStepPage.js`.
 
-- Order follows the design reference (verify documents, then portal login). The
-  flowchart also runs Site Survey in parallel with login (BR-06); that is **not
-  built**, the survey still waits for login. `nextStage` skips main steps already
-  done, and `lib/store.js` moves older cases that were in Login/Name Check to
-  the first of the two they have not finished.
+- Order follows the approved operating sequence: verify documents, complete
+  portal login, perform Site Survey, and then select/start the payment process.
+  `nextStage` skips main steps already done, and `lib/store.js` moves older
+  cases that were in Login/Name Check to the first unfinished step.
 - New cases are created only by confirming a lead and start at `nameCheck`.
 - **Hold**: a submit can be saved without moving on (Login Hold, name mismatch,
   Status Not Done). The case stays in that step's Pending tab with an "On hold"
   pill.
-- Final stage name is `done` (label "Completed"): after Tariff Code Check.
-- If a step is added after cases already reached `done`, `lib/store.js`
-  moves those cases to the first step they have not finished.
+- Final stage name is `done` (label "Completed"): after Warranty & Handover.
+- Workflow version 2 cases follow all newly added steps. Historical completed
+  cases remain completed so a deployment does not unexpectedly reopen them.
 
 BP SC Number remains unique across all converted cases.
 
@@ -256,7 +330,7 @@ Light theme only (`color-scheme: light`). Clean, professional dashboard look.
   workflow in the sidebar. Leads remain workflow item 01.
 - KPI cards show Open Leads, Active Cases, Needs Attention and Completed Cases.
 - Operational pipeline groups live work into Lead Qualification, Core Process,
-  Loan, Cash and Installation using each record's current stage.
+  Loan, Cash, Installation and Closure using each record's current stage.
 - Priority Queue combines due lead follow-ups, cases saved on hold and cases
   past their planned date. A case is considered overdue only when that step has
   a non-zero configured TAT; the current placeholder `TAT_DAYS = 0` does not
@@ -281,7 +355,21 @@ Light theme only (`color-scheme: light`). Clean, professional dashboard look.
   `/api/auth/login` are public. `/settings` is admin-only. Route handlers
   re-check the user from the file (`lib/session.js`: `getSession`,
   `requireAdmin`), so a deactivated or deleted user loses access immediately.
-- **Roles**: `admin` (steps + Settings) and `user` (steps only). Guards: you cannot
+- **Roles and page access** (`lib/access.js`): `admin` (all pages + Settings), `user`
+  (all process pages, no Settings: the old behaviour) and one role per team from the
+  Process Reference "Who handles what" list: `management` (all pages), `marketing`, `crm`,
+  `processing`, `login`, `documentation`, `banking`, `accounts`, `dispatch`, `service`,
+  `discom` (own pages only; Dashboard, Reports and Process Reference are common).
+  **Custom page access**: Settings > Users > Page access shows every page as a checkbox,
+  pre-ticked from the role; the admin can tick/untick to give one user more or less than
+  the role. Stored in `urjacon_users.pages` (jsonb, NULL = follow the role; run
+  `supabase/add_user_pages.sql` once on an existing database). `canAccessPage(user, slug)`
+  takes `{ role, pages }`. `/api/auth/me` re-issues the cookie so changes reach `proxy.js`.
+  Enforced in `proxy.js` (pages), the Sidebar (menu), `/api/cases/[id]/submit` (step) and
+  the lead write APIs (`requireLeadWriter`). To change who sees what, edit `TEAMS` there.
+  Team logins are created by `node --env-file=.env scripts/seed-team-users.mjs`
+  (re-runnable; username = first name, password = `Name@2026`; change them for real use).
+- **Roles (older note)**: `admin` (steps + Settings) and `user` (steps only). Guards: you cannot
   delete, deactivate or demote yourself, and at least one active admin must
   remain.
 - **Settings** (`/settings`, admin only):
@@ -334,7 +422,7 @@ No other file should need to change. If it does, the structure is wrong.
   "timestamp": "ISO date (when added)",
   "bpScNumber": "", "customerName": "", "village": "", "productCode": "",
   "branch": "", "dealer": "", "liaisoning": "", "route": "", "dealAmount": 0,
-  "stage": "login | nameCheck | siteSurvey | paymentWorkStart | bankFileReady | loanIssue | fileSubmission | firstInstallment | receiveDp | dispatch | cashAskPayment | cashPaymentReceived | cashApproval | cashDispatch | assignInstaller | inspectionFile | meterInspection | generationWifi | tariffCheck | done",
+  "stage": "login | nameCheck | siteSurvey | paymentWorkStart | bankFileReady | loanIssue | fileSubmission | firstInstallment | receiveDp | dispatch | cashAskPayment | cashPaymentReceived | cashApproval | cashDispatch | assignInstaller | inspectionFile | meterInspection | generationWifi | tariffCheck | warranty | done",
   "steps": { "<stepKey>": { "...step fields": "", "status": "done | hold",
                             "submittedAt": "ISO", "submittedBy": "" } },
   "schedule": { "<stepKey>": { "timestamp": "", "plannedDate": "", "actualDate": null } }
@@ -376,6 +464,7 @@ No other file should need to change. If it does, the structure is wrong.
 | GET | `/api/leads` | All leads |
 | POST | `/api/leads` | Add an open lead |
 | PUT / DELETE | `/api/leads/[id]` | Update/reopen/lose a lead; admin-only cleanup delete |
+| POST | `/api/leads/[id]/send-quotation` | Mark quotation sent; future WhatsApp delivery integration point |
 | POST | `/api/leads/[id]/convert` | Confirm a qualified lead and create its linked case |
 | GET | `/api/cases` | All cases |
 | POST | `/api/cases` | Disabled: returns an error directing the user to confirm a lead |

@@ -163,6 +163,7 @@ create table if not exists public.urjacon_users (
   name          text not null default '',
   role          text not null default 'user',            -- admin | user
   active        boolean not null default true,
+  pages         jsonb,                                   -- custom page access (slug list); NULL = role default
   password_hash text not null,                           -- salted scrypt hash, never plain text
   created_at    timestamptz not null default now(),
   constraint uj_users_pk primary key (id)
@@ -182,6 +183,7 @@ create index if not exists uj_cases_stage_idx  on public.urjacon_cases (stage);
 create index if not exists uj_cases_lead_idx   on public.urjacon_cases (lead_id);
 create index if not exists uj_leads_mobile_idx on public.urjacon_leads (mobile);
 create index if not exists uj_leads_status_idx on public.urjacon_leads (status);
+alter table public.urjacon_users add column if not exists pages jsonb;
 create index if not exists uj_users_name_idx   on public.urjacon_users (lower(username));
 
 -- ---------------------------------------------------------------- 3. copy old data
