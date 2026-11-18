@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import FileUpload from "@/components/FileUpload";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
@@ -37,7 +38,7 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
       )}
       <label className="block">
         <Label required>Login Check in PMSG</Label>
-        <select
+        <DropSelect
           className="field"
           disabled={readOnly}
           value={loginCheck}
@@ -46,10 +47,10 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
           <option value="">Select result</option>
           <option>Login Done</option>
           <option>Login Hold</option>
-        </select>
+        </DropSelect>
       </label>
       {loginCheck === "Login Done" && <label className="block"><Label required>PMSG Application No.</Label><input className="field" disabled={readOnly} value={applicationNo} onChange={(event) => setApplicationNo(event.target.value)} /></label>}
-      {loginCheck === "Login Hold" && <div className="grid gap-4 sm:grid-cols-2"><label><Label required>Hold Reason</Label><select className="field" disabled={readOnly} value={holdCode} onChange={(event) => setHoldCode(event.target.value)}><option value="">Select</option><option value="H02">H02 · Already registered with another vendor</option><option value="H03">H03 · Call not connecting / OTP not shared</option></select></label><label><Label>Retry Date</Label><input type="date" className="field" disabled={readOnly} value={retryDate} onChange={(event) => setRetryDate(event.target.value)} /></label></div>}
+      {loginCheck === "Login Hold" && <div className="grid gap-4 sm:grid-cols-2"><label><Label required>Hold Reason</Label><DropSelect className="field" disabled={readOnly} value={holdCode} onChange={(event) => setHoldCode(event.target.value)}><option value="">Select</option><option value="H02">H02 · Already registered with another vendor</option><option value="H03">H03 · Call not connecting / OTP not shared</option></DropSelect></label><label><Label>Retry Date</Label><input type="date" className="field" disabled={readOnly} value={retryDate} onChange={(event) => setRetryDate(event.target.value)} /></label></div>}
       <div>
         <Label>Image upload</Label>
         <FileUpload files={images} onChange={setImages} max={5} readOnly={readOnly} />

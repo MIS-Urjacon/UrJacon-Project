@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import { LocateFixed } from "lucide-react";
 import { FormActions, Label } from "@/components/steps/shared";
 import { useMe } from "@/lib/useMe";
@@ -124,6 +125,6 @@ function Field({ label, required, type = "text", value, onChange, step }) {
 
 function Select({ label, required, value, options, onChange }) {
   return (
-    <label className="block"><Label required={required}>{label}</Label><select className="field" required={required} value={value ?? ""} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{options.map((option) => { const [v, text] = Array.isArray(option) ? option : [option, option]; return <option key={v} value={v}>{text}</option>; })}</select></label>
+    <label className="block"><Label required={required}>{label}</Label><DropSelect className="field" required={required} value={value ?? ""} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{options.map((option) => { const [v, text] = Array.isArray(option) ? option : [option, option]; return <option key={v} value={v}>{text}</option>; })}</DropSelect></label>
   );
 }

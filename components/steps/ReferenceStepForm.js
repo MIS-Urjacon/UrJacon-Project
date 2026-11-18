@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import FileUpload from "@/components/FileUpload";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
@@ -101,5 +102,5 @@ function Field({ label, required, type = "text", value, onChange, hint }) {
 }
 
 function Select({ label, required, value, options, onChange, hint }) {
-  return <label className="block"><Label required={required}>{label}</Label><select className="field" required={required} value={value ?? ""} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{options.map((option) => { const [key, text] = Array.isArray(option) ? option : [option, option]; return <option key={key} value={key}>{text}</option>; })}</select>{hint && <AutoHint>{hint}</AutoHint>}</label>;
+  return <label className="block"><Label required={required}>{label}</Label><DropSelect className="field" required={required} value={value ?? ""} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{options.map((option) => { const [key, text] = Array.isArray(option) ? option : [option, option]; return <option key={key} value={key}>{text}</option>; })}</DropSelect>{hint && <AutoHint>{hint}</AutoHint>}</label>;
 }

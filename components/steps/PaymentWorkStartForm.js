@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 
@@ -38,7 +39,7 @@ export default function PaymentWorkStartForm({ row, readOnly, onSubmit, onCancel
         {FIELDS.map((fld) => (
           <label key={fld.key} className="block">
             <Label required>{fld.label}</Label>
-            <select
+            <DropSelect
               className="field"
               required
               disabled={readOnly}
@@ -49,7 +50,7 @@ export default function PaymentWorkStartForm({ row, readOnly, onSubmit, onCancel
               {fld.options.map((o) => (
                 <option key={o}>{o}</option>
               ))}
-            </select>
+            </DropSelect>
           </label>
         ))}
       </div>

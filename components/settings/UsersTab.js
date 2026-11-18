@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import DropSelect from "@/components/Select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { Avatar, Button, Pill, Toast } from "@/components/ui";
@@ -179,7 +180,7 @@ export default function UsersTab() {
               </label>
               <label className="block">
                 <Label required>Role</Label>
-                <select className="field" disabled={isSelf} value={form.role}
+                <DropSelect className="field" disabled={isSelf} value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value, pages: defaultPages(e.target.value) })}>
                   <option value="user">User (all steps)</option>
                   <option value="admin">Admin (steps + Settings)</option>
@@ -188,7 +189,7 @@ export default function UsersTab() {
                     .map(([k, label]) => (
                       <option key={k} value={k}>{label} (own pages only)</option>
                     ))}
-                </select>
+                </DropSelect>
               </label>
               <label className="block">
                 <Label required={!editing}>Password</Label>

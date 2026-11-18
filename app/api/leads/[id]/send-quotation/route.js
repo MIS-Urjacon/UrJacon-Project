@@ -32,6 +32,8 @@ export async function POST(_request, { params }) {
   const by = user?.name ?? "Unknown";
   const updated = {
     ...lead,
+    // The quotation page only creates the quotation; the customer's answer is taken in Call Tracker.
+    leadStage: "contacted",
     quotationStatus: "sent",
     quotationSentAt: now,
     quotationSentBy: by,

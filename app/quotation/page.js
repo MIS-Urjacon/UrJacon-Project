@@ -31,7 +31,8 @@ function QuotationFile({ file }) {
 }
 
 export default function QuotationPage() {
-  const filter = useCallback((row) => ["quotation", "documentsReady"].includes(row.leadStage), []);
+  // Pending = quotation still to be created / sent (including a started revision).
+  const filter = useCallback((row) => row.leadStage === "quotation" && row.quotationStatus !== "sent", []);
   const historyFilter = useCallback((row) => Boolean(row.quotationStatus && row.quotationCreatedAt), []);
-  return <LeadPipelinePage title="Quotation & Documents" subtitle="Step 3 · Create or save a quotation draft, send it, then record the response. WhatsApp delivery will use the same Send Quotation action after integration." filter={filter} historyFilter={historyFilter} historyColumns={HISTORY_COLUMNS} Form={QuotationForm} modalTitle="Create, send and track quotation" />;
+  return <LeadPipelinePage title="Quotation & Documents" subtitle="Step 3 · Create and send the quotation, or revise a sent one from History. After sending, the lead returns to Call Tracker for the customer's answer." filter={filter} historyFilter={historyFilter} historyColumns={HISTORY_COLUMNS} Form={QuotationForm} modalTitle="Create, send and track quotation" />;
 }

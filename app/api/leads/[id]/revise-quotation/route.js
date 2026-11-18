@@ -9,8 +9,8 @@ export async function POST(request, { params }) {
   const { id } = await params;
   const lead = await getLead(id);
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-  if (lead.status !== "open" || lead.leadStage !== "quotation") {
-    return NextResponse.json({ error: "Only a pending quotation can be revised" }, { status: 409 });
+  if (lead.status !== "open" || !["quotation", "contacted"].includes(lead.leadStage)) {
+    return NextResponse.json({ error: "Only an open lead with a sent quotation can be revised" }, { status: 409 });
   }
   if (lead.quotationStatus !== "sent") {
     return NextResponse.json({ error: "Send the current quotation before creating a revision" }, { status: 409 });
@@ -28,6 +28,7 @@ export async function POST(request, { params }) {
   const archived = withQuotationSnapshot(lead, { status: "sent" });
   const updated = {
     ...lead,
+    leadStage: "quotation",
     quotationRevision: quotationVersion(lead) + 1,
     quotationRevisionReason: revisionReason,
     quotationRevisions: archived,

@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import DropSelect from "@/components/Select";
 import { CalendarClock, History, IndianRupee, Mail, MapPin, Phone, UserRound, Zap } from "lucide-react";
 import { Avatar, DateCell, Pill } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
 import { LEAD_STAGE_LABEL } from "@/lib/leadConstants";
+import QuotationSummary from "@/components/leads/QuotationSummary";
+import DocumentPacket, { validatePacket } from "@/components/leads/DocumentPacket";
 
 const RESPONSES = ["Call back later", "Send quotation", "Not interested"];
+// Once the quotation is sent, the customer's answer is recorded here.
+const QUOTED_RESPONSES = ["Call back later", "Document given", "Not interested"];
 const TEMPERATURE_COLOR = { Hot: "red", Warm: "amber", Cold: "blue" };
 
 export default function CallTrackerForm({ row, onComplete, onCancel }) {
@@ -17,25 +22,45 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
   const [remark, setRemark] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const quoted = row.quotationStatus === "sent";
+  const [packet, setPacket] = useState(() => ({ ...row, documents: { ...(row.documents ?? {}) } }));
+  const [masters, setMasters] = useState({});
+  const setField = (key, value) => setPacket((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (quoted) fetch("/api/masters").then((r) => r.ok ? r.json() : {}).then(setMasters).catch(() => {});
+  }, [quoted]);
 
   async function submit(event) {
     event.preventDefault();
     if (response === "Call back later" && !nextFollowUp) return setError("Choose the next call date and time");
     if (response === "Not interested" && !remark.trim()) return setError("Record the reason the customer is not interested");
+    const givesDocuments = response === "Document given";
+    if (givesDocuments) {
+      const packetError = validatePacket(packet);
+      if (packetError) return setError(packetError);
+    }
     setSaving(true);
     const movesToQuotation = response === "Send quotation";
     const action = response === "Not interested" ? "lost" : "save";
     const body = {
-      ...row, action, lostReason: action === "lost" ? remark : "",
-      leadStage: movesToQuotation ? "quotation" : "contacted",
+      ...row, ...(givesDocuments ? packet : {}), action, lostReason: action === "lost" ? remark : "",
+      leadStage: movesToQuotation ? "quotation" : givesDocuments ? "documentsReady" : "contacted",
       nextFollowUp: response === "Call back later" ? nextFollowUp : "",
       temperature, outcome: response,
       followUp: { type: contactType, outcome: response, remark },
     };
     const apiResponse = await fetch(`/api/leads/${row.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const result = await apiResponse.json();
+    if (!apiResponse.ok) { setSaving(false); return setError(result.error ?? "Could not update the call"); }
+    if (givesDocuments) {
+      const conversion = await fetch(`/api/leads/${row.id}/convert`, { method: "POST" });
+      const converted = await conversion.json();
+      setSaving(false);
+      if (!conversion.ok) return setError(converted.error ?? "Could not send the record to Document Verification");
+      return onComplete(`${row.id} confirmed. Case ${converted.case.id} is now in Document Verification.`);
+    }
     setSaving(false);
-    if (!apiResponse.ok) return setError(result.error ?? "Could not update the call");
     onComplete(action === "lost" ? `${row.id} marked as lost.` : movesToQuotation ? `${row.id} sent to Quotation.` : `Follow-up saved for ${row.id}.`);
   }
 
@@ -67,19 +92,23 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
         </div>
       </section>
 
+      {quoted && <QuotationSummary quotation={row} title={Number(row.quotationRevision) > 0 ? `Latest Quotation (R${row.quotationRevision})` : "Quotation sent"} />}
+
       <fieldset className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
         <legend className="px-2 text-sm font-bold text-slate-800">Record new interaction</legend>
         <p className="mb-5 text-sm text-slate-500">Select how the customer was contacted and record the final response from this interaction.</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Select label="Contact Type" value={contactType} options={["Call", "Visit", "WhatsApp"]} onChange={setContactType} />
-          <Select label="Customer Response" required value={response} options={RESPONSES} onChange={setResponse} />
+          <Select label="Customer Response" required value={response} options={quoted ? QUOTED_RESPONSES : RESPONSES} onChange={setResponse} />
           <Select label="Lead Temperature" required value={temperature} options={["Hot", "Warm", "Cold"]} onChange={setTemperature} />
           {response === "Call back later" && <Field label="Next Call Date & Time" required type="datetime-local" value={nextFollowUp} onChange={setNextFollowUp} />}
           <TextArea className={response === "Call back later" ? "sm:col-span-1 lg:col-span-2" : "sm:col-span-2 lg:col-span-3"} label={response === "Not interested" ? "Lost Reason" : "Conversation Remark"} required={response === "Not interested"} value={remark} onChange={setRemark} />
         </div>
       </fieldset>
 
-      <FormActions onCancel={onCancel} saving={saving} error={error} submitLabel="Save call outcome" />
+      {response === "Document given" && <DocumentPacket form={packet} setForm={setPacket} set={setField} masters={masters} />}
+
+      <FormActions onCancel={onCancel} saving={saving} error={error} submitLabel={response === "Document given" ? "Send to Document Verification" : "Save call outcome"} />
     </form>
   );
 }
@@ -103,5 +132,5 @@ function TextArea({ className = "", label, required, value, onChange }) {
 }
 
 function Select({ label, required, value, options, onChange }) {
-  return <label className="block"><Label required={required}>{label}</Label><select className="field bg-white" required={required} value={value} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+  return <label className="block"><Label required={required}>{label}</Label><DropSelect className="field bg-white" required={required} value={value} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{options.map((option) => <option key={option}>{option}</option>)}</DropSelect></label>;
 }

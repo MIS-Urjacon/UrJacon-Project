@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 
@@ -33,7 +34,7 @@ export function makeSimpleForm({ stepKey, withAmount = false, extra = [], remark
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <Label required>Status</Label>
-            <select
+            <DropSelect
               className="field"
               required
               disabled={readOnly}
@@ -43,7 +44,7 @@ export function makeSimpleForm({ stepKey, withAmount = false, extra = [], remark
               <option value="">Select</option>
               <option>Done</option>
               <option>Not Done</option>
-            </select>
+            </DropSelect>
           </label>
           {withAmount && (
             <label className="block">
@@ -66,7 +67,7 @@ export function makeSimpleForm({ stepKey, withAmount = false, extra = [], remark
                 {x.currency ? " (₹)" : ""}
               </Label>
               {x.type === "select" ? (
-                <select
+                <DropSelect
                   className="field"
                   disabled={readOnly}
                   value={f[x.key]}
@@ -76,7 +77,7 @@ export function makeSimpleForm({ stepKey, withAmount = false, extra = [], remark
                   {x.options.map((o) => (
                     <option key={o}>{o}</option>
                   ))}
-                </select>
+                </DropSelect>
               ) : (
                 <input
                   className="field"

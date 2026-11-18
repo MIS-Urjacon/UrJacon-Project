@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
 
@@ -125,10 +126,10 @@ function Select({ label, required, value, options, onChange }) {
   return (
     <label className="block">
       <Label required={required}>{label}</Label>
-      <select className="field" required={required} value={value} onChange={(event) => onChange(event.target.value)}>
+      <DropSelect className="field" required={required} value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Select</option>
         {options.map((option) => <option key={option}>{option}</option>)}
-      </select>
+      </DropSelect>
     </label>
   );
 }

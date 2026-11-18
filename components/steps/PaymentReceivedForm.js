@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 
@@ -29,7 +30,7 @@ export default function PaymentReceivedForm({ row, readOnly, onSubmit, onCancel 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <Label required>90% Payment Received?</Label>
-          <select
+          <DropSelect
             className="field"
             required
             disabled={readOnly}
@@ -39,7 +40,7 @@ export default function PaymentReceivedForm({ row, readOnly, onSubmit, onCancel 
             <option value="">Select</option>
             <option>Yes</option>
             <option>No</option>
-          </select>
+          </DropSelect>
         </label>
         <label className="block sm:col-span-2">
           <Label>Remark</Label>

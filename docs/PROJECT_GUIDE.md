@@ -94,10 +94,15 @@ receiving a BP / SC Number or entering operations.
   `POST
   /api/leads/[id]/send-quotation` is the delivery integration point: it records
   manual delivery now and will send the WhatsApp message when that integration
-  is connected. Only after send are the three customer responses available:
-  **Call Back Later** returns the lead to Call Tracker, **Document Given**
-  completes the packet and moves it to Name Check, and **Not Interested** stops
-  the lead.
+  is connected. **The Quotation page is only for making quotations.** Call
+  Tracker "Send quotation" puts the lead in Quotation Pending; after Send the lead
+  returns to Call Tracker (stage `contacted`, quotation sent) and shows the latest
+  quotation there. The customer response is taken only in Call Tracker: **Call back
+  later**, **Document given** (handover packet, then the case starts at Document
+  Verification & Name Check) or **Not interested**. To change a sent quotation, open
+  it from Quotation > History and Start Revision (reason required): the lead returns
+  to Quotation Pending as R1/R2, and after it is sent again Call Tracker shows the
+  revised version. Every sent version stays in revision history.
 - **Lost:** A reason is compulsory. Lost leads stay in history and can be
   reopened.
 - **Handover to Document Verification & Name Check:** Quotation reference, BP / SC Number, Cash/Loan mode
@@ -491,6 +496,10 @@ also checks.
   `stage` and `schedule`, then **delete the temporary case** and any uploads.
   Never leave test data in `data/cases.json`. Real test cases the owner added
   (e.g. C-0001 to C-0004) must not be deleted.
+- **Demo data**: `node scripts/seed-demo-data.mjs <app url>` adds one record to every page
+  (5 leads for the lead pages and one case per workflow stage) through the real API, so
+  every validator runs. Ids it created are in `scripts/.demo-seed-ids.json`; delete those
+  records to remove the demo data. Customers are dummy; BP/SC numbers start with 10 / 30.
 - Do not kill the owner's running dev server. If the UI looks broken (dark
   background, missing buttons), the dev server has stale CSS: stop it, delete
   `.next`, run `npm run dev` again.

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import { CheckCircle2, XCircle, Copy } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
 import { CaseSummary } from "@/components/ui";
@@ -80,11 +81,11 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
         </legend>
         <label className="block max-w-sm">
           <Label required>System Type</Label>
-          <select className="field" value={systemType} onChange={(event) => setSystemType(event.target.value)}>
+          <DropSelect className="field" value={systemType} onChange={(event) => setSystemType(event.target.value)}>
             <option value="">Select</option>
             <option value="Tata">Tata</option>
             <option value="Non-Tata">Non-Tata</option>
-          </select>
+          </DropSelect>
         </label>
         <p className="mt-2 text-xs text-slate-500">
           The reference process requires the system to be marked Tata or Non-Tata during document verification.
@@ -113,13 +114,13 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
           <div className="grid gap-4 sm:grid-cols-2">
             <label>
               <Label required>Correction Type</Label>
-              <select className="field" value={correctionType} onChange={(event) => setCorrectionType(event.target.value)}>
+              <DropSelect className="field" value={correctionType} onChange={(event) => setCorrectionType(event.target.value)}>
                 <option value="">Select</option>
                 <option value="Document Correction">Document Correction</option>
                 <option value="Name Correction">Name Correction</option>
                 <option value="Owner Change">Owner Change</option>
                 <option value="New PAN">New PAN</option>
-              </select>
+              </DropSelect>
             </label>
             <label>
               <Label required>Correction Reason</Label>

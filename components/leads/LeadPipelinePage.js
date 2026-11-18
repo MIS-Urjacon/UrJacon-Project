@@ -43,7 +43,7 @@ export default function LeadPipelinePage({ title, subtitle, filter, Form, modalT
     .filter((row) => JSON.stringify(row).toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => tab === "history"
       ? (b.quotationCreatedAt || b.quotationSentAt || b.updatedAt || b.timestamp || "").localeCompare(a.quotationCreatedAt || a.quotationSentAt || a.updatedAt || a.timestamp || "")
-      : (a.nextFollowUp || a.timestamp || "").localeCompare(b.nextFollowUp || b.timestamp || "")),
+      : (b.updatedAt || b.timestamp || "").localeCompare(a.updatedAt || a.timestamp || "")),
   [historyRows, pendingRows, query, tab]);
 
   function complete(message) {

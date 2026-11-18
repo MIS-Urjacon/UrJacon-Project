@@ -61,7 +61,7 @@ export default function StepPage({
 
   const entry = (r) => r.steps?.[stepKey];
   const pending = useMemo(
-    () => rows.filter((r) => r.stage === stepKey).sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+    () => rows.filter((r) => r.stage === stepKey).sort((a, b) => (b.schedule?.[stepKey]?.timestamp || b.timestamp).localeCompare(a.schedule?.[stepKey]?.timestamp || a.timestamp)),
     [rows, stepKey]
   );
   const history = useMemo(

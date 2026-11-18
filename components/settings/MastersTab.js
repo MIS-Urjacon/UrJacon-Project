@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button, Toast } from "@/components/ui";
 import { MASTER_TYPES } from "@/lib/masterTypes";
@@ -52,10 +52,13 @@ export default function MastersTab() {
 
   return (
     <div className="grid border-t border-slate-100 md:grid-cols-[240px_1fr]">
-      <div className="border-b border-slate-100 p-3 md:border-b-0 md:border-r">
-        {MASTER_TYPES.map((t) => (
+      <div className="max-h-[70vh] overflow-y-auto border-b border-slate-100 p-3 md:border-b-0 md:border-r">
+        {MASTER_TYPES.map((t, i) => (
+          <Fragment key={t.key}>
+          {t.group && t.group !== MASTER_TYPES[i - 1]?.group && (
+            <div className="px-3 pb-1.5 pt-4 text-[11px] font-semibold tracking-[0.12em] text-slate-400">{t.group}</div>
+          )}
           <button
-            key={t.key}
             onClick={() => {
               setType(t.key);
               setErr("");
@@ -72,6 +75,7 @@ export default function MastersTab() {
               {(masters[t.key] ?? []).length}
             </span>
           </button>
+          </Fragment>
         ))}
       </div>
 

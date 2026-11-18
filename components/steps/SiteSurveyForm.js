@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 
@@ -48,7 +49,7 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
               onChange={(e) => set("customerName", e.target.value)}
             />
           </label>
-          <label className="block"><Label required>Smart Meter Present?</Label><select className="field" required disabled={readOnly} value={f.smartMeterPresent} onChange={(e) => set("smartMeterPresent", e.target.value)}><option value="">Select</option><option>Yes</option><option>No</option></select></label>
+          <label className="block"><Label required>Smart Meter Present?</Label><DropSelect className="field" required disabled={readOnly} value={f.smartMeterPresent} onChange={(e) => set("smartMeterPresent", e.target.value)}><option value="">Select</option><option>Yes</option><option>No</option></DropSelect></label>
           <label className="block sm:col-span-2"><Label required>Material Needed / Survey Report</Label><textarea rows={3} className="field !h-auto py-2.5" required disabled={readOnly} value={f.materialNeeded} onChange={(e) => set("materialNeeded", e.target.value)} /></label>
           <label className="block">
             <Label required>Contact Number</Label>
