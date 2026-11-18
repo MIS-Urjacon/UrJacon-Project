@@ -1,7 +1,7 @@
 "use client";
 import { Paperclip, FileText } from "lucide-react";
 import { Pill, RoutePill } from "@/components/ui";
-import { NAME_DOCS } from "@/lib/workflow";
+import { NAME_DOCS, docData } from "@/lib/workflow";
 
 // Reusable table columns for the step pages.
 //  - A step's own submitted data is shown in its History tab (OUT below).
@@ -65,7 +65,7 @@ function RemarkImages({ remark, images = [] }) {
 const SHORT = { aadhaar: "Aadhaar", pan: "PAN", passbook: "Passbook", bill: "Bill" };
 
 function Names({ row }) {
-  const n = step(row, "nameCheck");
+  const n = docData(row);
   if (!n) return dash;
   return (
     <div className="space-y-0.5 text-xs leading-tight">
@@ -131,12 +131,36 @@ export const C = {
       );
     },
   },
+  // Document Receive
+  received: {
+    label: "Received",
+    cell: (r) => {
+      const d = step(r, "documentReceive");
+      if (!d?.receivedDate) return dash;
+      return <Stack top={day(d.receivedDate)} bottom={d.receivedThrough} />;
+    },
+  },
+  verified: {
+    label: "Verified",
+    cell: (r) => {
+      const v = step(r, "nameCheck");
+      if (!v) return dash;
+      return (
+        <div className="leading-tight">
+          <Pill color={v.verificationStatus === "Pending" || v.verificationResult === "Pending" ? "amber" : "green"}>
+            {v.verificationStatus ?? v.verificationResult ?? "Verified"}
+          </Pill>
+          {v.remark && <div className="mt-1 max-w-[180px] truncate text-xs text-slate-500" title={v.remark}>{v.remark}</div>}
+        </div>
+      );
+    },
+  },
   // Name Check
   names: { label: "Names on Documents", cell: (r) => <Names row={r} /> },
   verification: {
     label: "Verification",
     cell: (r) => {
-      const verification = step(r, "nameCheck");
+      const verification = docData(r);
       if (!verification) return dash;
       return (
         <div className="leading-tight">
@@ -278,8 +302,9 @@ export const C = {
 
 // Each step's own submitted data (History tab).
 export const OUT = {
+  documentReceive: [C.received, C.verification, C.names],
   login: [C.loginDetail],
-  nameCheck: [C.verification, C.names],
+  nameCheck: [C.verified],
   siteSurvey: [C.contact, C.surveyDate],
   paymentWorkStart: [C.cashLoan],
   bankFileReady: [remarkCol("bankFileReady")],
@@ -303,7 +328,7 @@ export const OUT = {
 // Important data from earlier steps, shown on the page of the step that needs it.
 export const CARRY = {
   login: [C.verification, C.names],
-  nameCheck: [],
+  nameCheck: [C.received, C.verification, C.names],
   siteSurvey: [C.dealerLiaison],
   paymentWorkStart: [C.routeAmount, C.contact, C.surveyDate],
   bankFileReady: [C.cashLoan, C.routeAmount, C.contact],

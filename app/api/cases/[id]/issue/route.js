@@ -6,7 +6,7 @@ import { getSession } from "@/lib/session";
 import { canSubmitStep } from "@/lib/access";
 
 // Report an issue from the case's current step. The case goes back to Document
-// Verification & Name Check, where the issue is shown; after it is resolved there the
+// Receive, where the issue is shown; after it is resolved there the
 // case returns to the step it was reported from.
 export async function POST(request, { params }) {
   const { id } = await params;
@@ -16,7 +16,7 @@ export async function POST(request, { params }) {
   if (!row) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
   const from = row.stage;
-  if (from === "nameCheck" || !ALL_STEPS.includes(from)) {
+  if (from === "nameCheck" || from === "documentReceive" || !ALL_STEPS.includes(from)) {
     return NextResponse.json({ error: "An issue can only be reported from a step after Document Verification" }, { status: 409 });
   }
   if (!canSubmitStep(me, from)) {
@@ -46,8 +46,8 @@ export async function POST(request, { params }) {
   };
   row.issue = issue;
   row.issues = [...(row.issues ?? []), issue];
-  row.stage = "nameCheck";
-  row.schedule = { ...row.schedule, nameCheck: newSchedule("nameCheck", now) };
+  row.stage = "documentReceive";
+  row.schedule = { ...row.schedule, documentReceive: newSchedule("documentReceive", now) };
   await saveCase(row);
   return NextResponse.json(row);
 }

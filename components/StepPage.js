@@ -118,7 +118,7 @@ export default function StepPage({
     const j = await res.json();
     if (!res.ok) return j.error;
     setIssueRow(null);
-    notify(`Issue reported. Case moved to ${STAGE_LABEL.nameCheck}.`);
+    notify(`Issue reported. Case moved to ${STAGE_LABEL.documentReceive}.`);
     load();
     return null;
   }
@@ -232,7 +232,7 @@ export default function StepPage({
                             >
                               <ClipboardCheck size={13} /> Update
                             </button>
-                            {stepKey !== "nameCheck" && (
+                            {stepKey !== "nameCheck" && stepKey !== "documentReceive" && (
                               <button
                                 onClick={() => setIssueRow(r)}
                                 className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"

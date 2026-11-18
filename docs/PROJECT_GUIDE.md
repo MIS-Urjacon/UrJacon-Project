@@ -250,17 +250,33 @@ with the link"). The sheet has Who / How / When per step:
 - Workflow version 2 cases follow all newly added steps. Historical completed
   cases remain completed so a deployment does not unexpectedly reopen them.
 
+### Document Receive (before Document Verification)
+
+- A confirmed lead (Call Tracker "Document given") creates a case at `documentReceive`
+  (`/document-receive`, before Document Verification). It is not part of `FLOW`;
+  `INTAKE_STEP` / `nextStage` in `lib/workflow.js` send it to Name Check.
+- **Document Receive does the document work**: receive and upload Aadhaar, PAN, Passbook and
+  Bijli Bill, name on each, Proper / Correction Required, Tata or Non-Tata, correction type,
+  Received Through and Received Date. A correction keeps the case here on hold; only all
+  proper documents move on. The data is saved under `steps.documentReceive`; use
+  `docData(row)` (older cases saved it under `nameCheck`) to read it.
+- **Document Verification (`nameCheck`) only verifies**: the verifier sees the received
+  documents (names, files, Proper tag) and ticks Verified on each. All verified = Login PMSG;
+  otherwise hold with a remark. A Quote icon in both popups opens the quotation on demand
+  (`components/steps/QuoteButton.js`).
+
 ### Issue Report (every step after Document Verification)
 
 - Every step page except Document Verification has a **Report Issue** button next to
   Update in the Pending tab (`components/steps/IssueReportForm.js`, shown by `StepPage`).
   Fields: Issue Type (`lib/issues.js`), Issue Details, optional files.
 - `POST /api/cases/[id]/issue` stores `row.issue` (latest) and `row.issues` (history) in
-  the case `extra` jsonb (no new column), moves the case to `nameCheck` and resets its
-  schedule. The Document Verification page shows an **Issue Report** column and a banner
-  in the popup. `lib/store.js` does not auto-advance a case that has an open issue.
-- Submitting Document Verification as Done resolves the issue and returns the case to
-  the step it was reported from (`issue.fromStep`), not to Login.
+  the case `extra` jsonb (no new column), moves the case to `documentReceive` and resets its
+  schedule. The Document Receive page shows an **Issue Report** column and a banner in the
+  popup. `lib/store.js` does not auto-advance a case that has an open issue.
+- After the fix the case goes Document Receive -> Document Verification as usual;
+  verifying it as Done resolves the issue and returns the case to the step it was
+  reported from (`issue.fromStep`), not to Login.
 
 BP SC Number remains unique across all converted cases.
 

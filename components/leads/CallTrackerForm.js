@@ -58,7 +58,7 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
       const converted = await conversion.json();
       setSaving(false);
       if (!conversion.ok) return setError(converted.error ?? "Could not send the record to Document Verification");
-      return onComplete(`${row.id} confirmed. Case ${converted.case.id} is now in Document Verification.`);
+      return onComplete(`${row.id} confirmed. Case ${converted.case.id} is now in Document Receive.`);
     }
     setSaving(false);
     onComplete(action === "lost" ? `${row.id} marked as lost.` : movesToQuotation ? `${row.id} sent to Quotation.` : `Follow-up saved for ${row.id}.`);
@@ -108,7 +108,7 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
 
       {response === "Document given" && <DocumentPacket form={packet} setForm={setPacket} set={setField} masters={masters} />}
 
-      <FormActions onCancel={onCancel} saving={saving} error={error} submitLabel={response === "Document given" ? "Send to Document Verification" : "Save call outcome"} />
+      <FormActions onCancel={onCancel} saving={saving} error={error} submitLabel={response === "Document given" ? "Send to Document Receive" : "Save call outcome"} />
     </form>
   );
 }

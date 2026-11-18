@@ -87,10 +87,12 @@ const PLAN = [
   ["finalBankFile", "Loan", 0, "Sarangarh"], ["finalBankPayment", "Loan", 0, "Saraipali"], ["subsidyRedeem", "Loan", 0, "Sohela"],
   ["subsidyDisbursal", "Cash", "Yes", "Sarangarh"], ["chequeDeposit", "Subsidy Cheque", 0, "Padampur"], ["balanceClearance", "Loan", 0, "Saraipali"],
   ["warranty", "Cash", "Yes", "Sarangarh"],
+  ["documentReceive", "Loan", 0, "Saraipali"],
 ];
 
 // who submits each step (a user whose role has that page)
 const WHO = {
+  documentReceive: "reshmi",
   nameCheck: "reshmi", login: "tripti", siteSurvey: "arun", paymentWorkStart: "ankita", agreementUpload: "soniya",
   janSamarth: "reshmi", bankFileReady: "reshmi", fileSubmission: "alok", loanIssue: "reshmi", firstInstallment: "alok",
   receiveDp: "chetan", cashReceipt: "chetan", dispatch: "sameer", cashDispatch: "jitendra", cashAskPayment: "ankita",
@@ -108,10 +110,12 @@ function payload(step, c) {
   const f = (u) => [{ url: u.url, name: u.name }];
   const odisha = c.state === "Odisha";
   switch (step) {
-    case "nameCheck": {
+    case "documentReceive": {
       const doc = () => ({ name: c.name, files: f(files.png), reviewStatus: "Proper" });
-      return { aadhaar: doc(), pan: doc(), passbook: doc(), bill: doc(), systemType: c.index % 2 ? "Tata" : "Non-Tata" };
+      return { aadhaar: doc(), pan: doc(), passbook: doc(), bill: doc(), receivedThrough: "WhatsApp", receivedDate: day(20), systemType: c.index % 2 ? "Tata" : "Non-Tata" };
     }
+    case "nameCheck":
+      return { verified: { aadhaar: true, pan: true, passbook: true, bill: true }, remark: "" };
     case "login": return { loginCheck: "Login Done", applicationNo: c.appNo, remark: "OTP shared by consumer", images: f(files.png) };
     case "siteSurvey":
       return { customerName: c.name, contactNumber: c.mobile, village: c.village, surveyDate: day(14), surveyorName: "Arun",

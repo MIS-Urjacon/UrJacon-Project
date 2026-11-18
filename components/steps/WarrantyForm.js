@@ -12,7 +12,7 @@ export default function WarrantyForm({ row, readOnly, onSubmit, onCancel }) {
     balanceStatus: previous?.balanceStatus ?? (clearance?.status === "done" ? "Cleared" : ""),
     balanceDue: previous?.balanceDue ?? clearance?.balanceDue ?? "",
     balanceRecovered: previous?.balanceRecovered ?? clearance?.balanceRecovered ?? "",
-    warrantyType: previous?.warrantyType ?? row.steps?.nameCheck?.systemType ?? "",
+    warrantyType: previous?.warrantyType ?? docData(row)?.systemType ?? "",
     tataWarrantyReference: previous?.tataWarrantyReference ?? "",
     panelWarrantyDcr: previous?.panelWarrantyDcr ?? "",
     inverterRegistration: previous?.inverterRegistration ?? "",
@@ -77,7 +77,7 @@ export default function WarrantyForm({ row, readOnly, onSubmit, onCancel }) {
           )}
           <Select label="Customer Handover Kit Given" required={cleared} value={form.handoverKitGiven} options={["Yes", "No"]} onChange={(value) => set("handoverKitGiven", value)} />
         </div>
-        {row.steps?.nameCheck?.systemType && <p className="mt-2 text-xs font-medium text-brand-dark">Warranty Type auto-filled from Document Verification.</p>}
+        {docData(row)?.systemType && <p className="mt-2 text-xs font-medium text-brand-dark">Warranty Type auto-filled from Document Verification.</p>}
         <p className="mt-3 text-xs text-slate-500">
           Handover kit includes warranty documents, invoice and the consumer-vendor agreement.
         </p>

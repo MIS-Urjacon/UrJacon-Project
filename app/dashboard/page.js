@@ -22,7 +22,7 @@ import { LEAD_STAGE_LABEL } from "@/lib/leadConstants";
 import { STEPS } from "@/lib/steps";
 
 const GROUPS = [
-  { key: "process", label: "Core process", hint: "Documents → PMSG → survey → payment", stages: FLOW, icon: FolderKanban, color: "bg-sky-500" },
+  { key: "process", label: "Core process", hint: "Documents → PMSG → survey → payment", stages: [...FLOW, "documentReceive"], icon: FolderKanban, color: "bg-sky-500" },
   { key: "loan", label: "Loan process", hint: "Bank file to dispatch", stages: LOAN_FLOW, icon: Landmark, color: "bg-indigo-500" },
   { key: "cash", label: "Cash process", hint: "Payment collection and approval", stages: CASH_FLOW.filter((stage) => stage !== "cashReceipt"), icon: BadgeIndianRupee, color: "bg-amber-500" },
   { key: "payment", label: "Payment gate", hint: "Cheque documents and signed receipt", stages: ["subsidyChequeReady", "cashReceipt"], icon: BadgeIndianRupee, color: "bg-orange-500" },
@@ -266,13 +266,13 @@ function summarize(leads, cases, asOf) {
   const hasOpenIssue = (row) => Boolean(row.issue?.open);
   const priorities = [
     ...dueLeads.map((lead) => ({ key: `lead-${lead.id}`, type: "Follow-up due", color: "rose", title: lead.customerName, meta: `${lead.id} · ${lead.mobile}`, time: lead.nextFollowUp, href: "/leads" })),
-    ...activeCases.filter(hasOpenIssue).map((row) => ({ key: `issue-${row.id}`, type: "Open issue", color: "rose", title: row.customerName, meta: `${row.id} · ${row.issue.type} · from ${row.issue.fromLabel}`, time: row.issue.reportedAt, href: stageHref("nameCheck") })),
+    ...activeCases.filter(hasOpenIssue).map((row) => ({ key: `issue-${row.id}`, type: "Open issue", color: "rose", title: row.customerName, meta: `${row.id} · ${row.issue.type} · from ${row.issue.fromLabel}`, time: row.issue.reportedAt, href: stageHref("documentReceive") })),
     ...holdCases.filter((row) => !hasOpenIssue(row)).map((row) => ({ key: `hold-${row.id}`, type: "On hold", color: "amber", title: row.customerName, meta: `${row.id} · ${STAGE_LABEL[row.stage]}`, time: row.steps?.[row.stage]?.submittedAt, href: stageHref(row.stage) })),
     ...overdueCases.filter((row) => !hasOpenIssue(row) && !holdCases.some((hold) => hold.id === row.id)).map((row) => ({ key: `overdue-${row.id}`, type: "Past planned date", color: "red", title: row.customerName, meta: `${row.id} · ${STAGE_LABEL[row.stage]}`, time: row.schedule?.[row.stage]?.plannedDate, href: stageHref(row.stage) })),
   ].sort((a, b) => new Date(a.time || 0) - new Date(b.time || 0));
 
   const leadActivity = leads.map((lead) => ({ key: `lead-${lead.id}-${lead.updatedAt}`, title: lead.status === "converted" ? "Lead converted to case" : lead.status === "lost" ? "Lead marked lost" : "Lead updated", detail: lead.status === "open" ? LEAD_STAGE_LABEL[lead.leadStage] : lead.status, customer: lead.customerName, reference: lead.id, owner: lead.updatedBy || lead.createdBy, time: lead.updatedAt || lead.timestamp, href: "/leads" }));
-  const caseActivity = cases.flatMap((row) => Object.entries(row.steps ?? {}).filter(([, entry]) => entry?.submittedAt).map(([step, entry]) => ({ key: `${row.id}-${step}-${entry.submittedAt}`, title: `${STAGE_LABEL[step] ?? step} completed`, detail: entry.status === "hold" ? "Saved on hold" : "Moved to next stage", customer: row.customerName, reference: row.id, owner: entry.submittedBy, time: entry.submittedAt, href: stageHref(step) })));
+  const caseActivity = cases.flatMap((row) => Object.entries(row.steps ?? {}).filter(([, entry]) => entry?.submittedAt && !entry.derived).map(([step, entry]) => ({ key: `${row.id}-${step}-${entry.submittedAt}`, title: `${STAGE_LABEL[step] ?? step} completed`, detail: entry.status === "hold" ? "Saved on hold" : "Moved to next stage", customer: row.customerName, reference: row.id, owner: entry.submittedBy, time: entry.submittedAt, href: stageHref(step) })));
   const recentActivity = [...leadActivity, ...caseActivity].filter((item) => item.time).sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
   const conversionRate = leads.length ? Math.round((convertedLeads.length / leads.length) * 100) : 0;
   const totalLiveWork = openLeads.length + activeCases.length;
