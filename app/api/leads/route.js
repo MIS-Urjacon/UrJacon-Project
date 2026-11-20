@@ -7,9 +7,15 @@ import {
   saveLead,
 } from "@/lib/leads";
 import { getSession, requireLeadWriter } from "@/lib/session";
+import { canSee, withAssignees } from "@/lib/assign";
+import { readAssigneeDefaults } from "@/lib/defaultAssignees";
+import { readUsers } from "@/lib/users";
 
 export async function GET() {
-  return NextResponse.json(await readLeads());
+  const me = await getSession();
+  const users = await readUsers();
+  const defaults = await readAssigneeDefaults(users);
+  return NextResponse.json((await readLeads()).filter((lead) => canSee(me, lead, defaults)).map((lead) => withAssignees(lead, users, defaults)));
 }
 
 export async function POST(request) {

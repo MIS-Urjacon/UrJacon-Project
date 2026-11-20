@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DropSelect from "@/components/Select";
-import { CheckCircle2, XCircle, Copy } from "lucide-react";
+import { CheckCircle2, XCircle, Copy, ChevronDown } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
@@ -27,6 +27,16 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [receivedThrough, setReceivedThrough] = useState(prev?.receivedThrough ?? "");
+  // Cash / Loan chosen here is picked up by Payment Work Start (which keeps its own field).
+  const [paymentMode, setPaymentMode] = useState(prev?.paymentMode ?? row.preferredPaymentMode ?? "");
+  const [terracePhoto, setTerracePhoto] = useState(prev?.terracePhotoFiles ?? []);
+  // Pricing and the other details filled at Lead / Quotation (older cases are read from their lead).
+  const [lead, setLead] = useState(null);
+  useEffect(() => {
+    if (!row.leadId) return;
+    fetch("/api/leads").then((r) => (r.ok ? r.json() : [])).then((list) => setLead(list.find((l) => l.id === row.leadId) ?? null)).catch(() => {});
+  }, [row.leadId]);
+  const pick = (key) => row[key] ?? lead?.[key];
   const [receivedDate, setReceivedDate] = useState(prev?.receivedDate ?? new Date().toISOString().slice(0, 10));
 
   const ref = normName(row.customerName);
@@ -70,6 +80,8 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
       receivedThrough,
       receivedDate,
       systemType,
+      paymentMode,
+      terracePhotoFiles: terracePhoto,
       correctionType: anyCorrection ? correctionType : "",
       correctionReason: anyCorrection ? correctionReason : "",
     });
@@ -100,7 +112,9 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
           <div className="mt-1 text-xs">Fix it here; the case then goes to Document Verification and returns to {STAGE_LABEL[row.issue.fromStep]} once verified.</div>
         </div>
       )}
-      <fieldset disabled={readOnly} className="grid gap-4 sm:grid-cols-2">
+      <LeadDetails row={row} pick={pick} />
+
+      <fieldset disabled={readOnly} className="grid gap-4 sm:grid-cols-3">
         <label className="block">
           <Label required>Received Through</Label>
           <DropSelect className="field" value={receivedThrough} onChange={(e) => setReceivedThrough(e.target.value)}>
@@ -114,13 +128,7 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
           <Label required>Received Date</Label>
           <input className="field" type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
         </label>
-      </fieldset>
-
-      <fieldset disabled={readOnly}>
-        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Document details
-        </legend>
-        <label className="block max-w-xs">
+        <label className="block">
           <Label required>System Type</Label>
           <DropSelect className="field" value={systemType} onChange={(event) => setSystemType(event.target.value)}>
             <option value="">Select</option>
@@ -128,21 +136,113 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
             <option value="Non-Tata">Non-Tata</option>
           </DropSelect>
         </label>
+        <label className="block">
+          <Label>Payment Mode (Cash / Loan)</Label>
+          <DropSelect className="field" value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}>
+            <option value="">Select</option>
+            {(row.state === "Odisha" ? ["Cash", "Loan", "Subsidy Cheque"] : ["Cash", "Loan"]).map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </DropSelect>
+        </label>
       </fieldset>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">
-          The name on every document must match <b className="text-slate-800">{row.customerName}</b>.
-        </p>
-        {!readOnly && (
-          <button
-            type="button"
-            onClick={fillSameName}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-brand px-3 text-sm font-semibold text-brand-dark transition hover:bg-brand-50"
-          >
-            <Copy size={15} /> Fill same name in all
-          </button>
-        )}
-      </div>
+
+      <section>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Documents</div>
+            <p className="mt-1 text-sm text-slate-500">
+              The name on every document must match <b className="text-slate-800">{row.customerName}</b>.
+            </p>
+          </div>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={fillSameName}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-brand px-3 text-sm font-semibold text-brand-dark transition hover:bg-brand-50"
+            >
+              <Copy size={15} /> Fill same name in all
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          <div className="hidden grid-cols-[170px_minmax(0,1fr)_minmax(0,1fr)_230px] gap-4 bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:grid">
+            <span>Document</span>
+            <span>Name on document <span className="text-rose-500">*</span></span>
+            <span>File <span className="text-rose-500">*</span></span>
+            <span>Check <span className="text-rose-500">*</span></span>
+          </div>
+          {NAME_DOCS.map(([k, label]) => {
+            const s = state(k);
+            const proper = s === "match" && docs[k].reviewStatus === "Proper";
+            const correction = needsCorrection(k);
+            return (
+              <div
+                key={k}
+                className="grid items-center gap-3 border-t border-slate-100 px-4 py-3 lg:grid-cols-[170px_minmax(0,1fr)_minmax(0,1fr)_230px] lg:gap-4"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                      proper ? "bg-emerald-50 text-emerald-600" : correction ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    {correction ? <XCircle size={15} /> : <CheckCircle2 size={15} />}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-800">{label}</div>
+                    <div className={`text-[11px] font-medium ${proper ? "text-emerald-600" : correction ? "text-rose-600" : "text-slate-400"}`}>
+                      {proper ? "Proper" : correction ? (s === "mismatch" ? "Name does not match" : "Correction required") : "Pending"}
+                    </div>
+                  </div>
+                </div>
+                <input
+                  className={`field ${s === "mismatch" ? "border-rose-300" : ""}`}
+                  disabled={readOnly}
+                  placeholder="Name as printed"
+                  aria-label={`Name on ${label}`}
+                  value={docs[k].name}
+                  onChange={(e) => set(k, { name: e.target.value })}
+                />
+                <FileUpload files={docs[k].files} onChange={(files) => set(k, { files })} max={1} readOnly={readOnly} compact />
+                <fieldset disabled={readOnly} className="flex h-10 overflow-hidden rounded-lg border border-slate-200 bg-white text-xs font-semibold">
+                  {["Proper", "Correction Required"].map((value) => (
+                    <label
+                      key={value}
+                      className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 px-2 transition first:border-r first:border-slate-200 ${
+                        docs[k].reviewStatus === value
+                          ? value === "Proper"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-rose-50 text-rose-700"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`${k}-review-status`}
+                        value={value}
+                        checked={docs[k].reviewStatus === value}
+                        onChange={() => set(k, { reviewStatus: value })}
+                        className="sr-only"
+                      />
+                      {value === "Proper" ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                      {value === "Proper" ? "Proper" : "Needs correction"}
+                    </label>
+                  ))}
+                </fieldset>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Terrace geotag photo (optional)</div>
+        <div className="rounded-xl border border-slate-200 px-4 py-3">
+          <FileUpload files={terracePhoto} onChange={setTerracePhoto} max={1} readOnly={readOnly} compact />
+        </div>
+      </section>
 
       {anyCorrection && (
         <fieldset disabled={readOnly} className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
@@ -172,84 +272,6 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
         </fieldset>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {NAME_DOCS.map(([k, label]) => {
-          const s = state(k);
-          const correction = needsCorrection(k);
-          return (
-            <div
-              key={k}
-              className={`rounded-xl border p-4 ${
-                s === "match" && docs[k].reviewStatus === "Proper"
-                  ? "border-emerald-200 bg-emerald-50/40"
-                  : correction
-                  ? "border-rose-200 bg-rose-50/40"
-                  : "border-slate-200"
-              }`}
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-semibold">{label}</span>
-                {s === "match" && docs[k].reviewStatus === "Proper" && (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                    <CheckCircle2 size={14} /> Proper
-                  </span>
-                )}
-                {correction && (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-rose-600">
-                    <XCircle size={14} /> Correction required
-                  </span>
-                )}
-              </div>
-              <label className="block">
-                <Label required>Name on document</Label>
-                <input
-                  className="field"
-                  disabled={readOnly}
-                  placeholder="Name as printed"
-                  value={docs[k].name}
-                  onChange={(e) => set(k, { name: e.target.value })}
-                />
-              </label>
-              <div className="mt-3">
-                <FileUpload
-                  files={docs[k].files}
-                  onChange={(files) => set(k, { files })}
-                  max={1}
-                  readOnly={readOnly}
-                />
-              </div>
-              <fieldset disabled={readOnly} className="mt-3">
-                <Label required>Document Check</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {["Proper", "Correction Required"].map((value) => (
-                    <label
-                      key={value}
-                      className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
-                        docs[k].reviewStatus === value
-                          ? value === "Proper"
-                            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                            : "border-rose-300 bg-rose-50 text-rose-700"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name={`${k}-review-status`}
-                        value={value}
-                        checked={docs[k].reviewStatus === value}
-                        onChange={() => set(k, { reviewStatus: value })}
-                        className="accent-[var(--color-brand)]"
-                      />
-                      {value === "Proper" ? "Proper" : "Needs correction"}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            </div>
-          );
-        })}
-      </div>
-
       {!readOnly && (
         <div
           className={`rounded-lg px-4 py-3 text-sm ${
@@ -276,5 +298,53 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
         submitLabel={allProper ? "Submit & send to Document Verification" : "Save correction required (hold)"}
       />
     </form>
+  );
+}
+
+const money = (value) => (Number(value) > 0 ? `₹${Number(value).toLocaleString("en-IN")}` : "");
+
+// Pricing and the other details already filled at Lead / Quotation, shown for reference.
+function LeadDetails({ row, pick }) {
+  const price = Number(pick("dealAmount")) || 0;
+  const central = Number(pick("quotationCentralSubsidy")) || 0;
+  const stateSubsidy = Number(pick("quotationStateSubsidy")) || 0;
+  const subsidy = central + stateSubsidy || Number(pick("quotationSubsidy")) || 0;
+  const kw = pick("kwWanted");
+  const items = [
+    ["Quotation", pick("quotationReference")],
+    ["System", [kw ? `${kw} kW` : "", pick("quotationGridType"), pick("quotationDcrType")].filter(Boolean).join(" · ")],
+    ["System Price", money(price)],
+    ["Central Subsidy", money(central)],
+    ["State Subsidy", money(stateSubsidy)],
+    ["Cost After Subsidy", price ? money(Math.max(0, price - subsidy)) : ""],
+    ["Brand", pick("brand") || pick("quotationPanelBrand")],
+    ["Product Interested", pick("productInterested")],
+    ["Pricing", pick("pricing")],
+    ["Payment Mode (lead)", pick("paymentMode") || pick("preferredPaymentMode")],
+    ["Lead Source", pick("leadSource") ?? pick("source")],
+    ["Dealer", pick("dealer")],
+    ["Branch / Route", [pick("branch"), pick("route")].filter(Boolean).join(" / ")],
+    ["Mobile", pick("mobile")],
+    ["Email", pick("email")],
+    ["State", pick("state")],
+    ["Remark", pick("remark")],
+  ];
+  return (
+    <details className="group rounded-xl border border-slate-200 bg-slate-50/60" open>
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Lead &amp; quotation details
+        <ChevronDown size={15} className="transition group-open:rotate-180" />
+      </summary>
+      <div className="grid gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-3 sm:grid-cols-3 lg:grid-cols-4">
+        {items.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+            <div className="mt-0.5 truncate text-sm font-semibold text-slate-800" title={value || ""}>
+              {value || <span className="font-normal text-slate-300">-</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }

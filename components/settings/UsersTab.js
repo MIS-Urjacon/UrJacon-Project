@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import DropSelect from "@/components/Select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import Modal from "@/components/Modal";
-import { Avatar, Button, Pill, Toast } from "@/components/ui";
+import { Button, Pill, Toast } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
 import { useMe } from "@/lib/useMe";
 import { ROLE_LABEL, GRANTABLE_PAGES, defaultPages } from "@/lib/access";
@@ -65,7 +65,7 @@ export default function UsersTab() {
       body: JSON.stringify(form),
     });
     setSaving(false);
-    if (!res.ok) return setErr((await res.json()).error);
+    if (!res.ok) return setErr((await res.json().catch(() => ({}))).error || "Could not save the user");
     setModal(null);
     notify(editing ? "User updated" : "User added");
     load();
@@ -125,7 +125,6 @@ export default function UsersTab() {
                 </td>
                 <td className={td}>
                   <div className="flex items-center gap-3">
-                    <Avatar name={u.name} />
                     <div className="font-semibold text-slate-800">
                       {u.name}
                       {u.id === me?.id && <span className="ml-2 text-xs font-medium text-slate-400">(you)</span>}

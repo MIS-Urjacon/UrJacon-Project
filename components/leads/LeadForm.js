@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DropSelect from "@/components/Select";
 import { LocateFixed } from "lucide-react";
 import { FormActions, Label } from "@/components/steps/shared";
 import { useMe } from "@/lib/useMe";
 
+const TEMPERATURES = ["Interested", "Not Interested", "Follow up Required"];
+const KW_OPTIONS = [["3", "3 kW"], ["5", "5 kW"]];
 const SOURCES = ["CSEB / Bought Data", "Field Visit", "Agent", "Office Connection / Referral"];
 const EMPTY = {
   customerName: "", mobile: "", email: "", village: "", address: "", state: "", latitude: null, longitude: null,
   locationAccuracy: null, locationCapturedAt: "", bpScNumber: "", source: "", agent: "",
-  monthlyBill: "", kwWanted: "", productCode: "", paymentMode: "", temperature: "Warm",
+  monthlyBill: "", kwWanted: "", productCode: "", paymentMode: "", temperature: "", remark: "", pricing: "", brand: "", productInterested: "",
   nextFollowUp: "", outcome: "", quotationReference: "", commission: "", branch: "", dealer: "",
   liaisoning: "", route: "", dealAmount: "", leadStage: "new",
   documents: { aadhaar: false, pan: false, passbook: false, bill: false, terracePhoto: false },
@@ -29,7 +31,15 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
   const [error, setError] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const [brands, setBrands] = useState([]);
+  useEffect(() => {
+    fetch("/api/masters").then((r) => (r.ok ? r.json() : {})).then((m) => setBrands(m.brand ?? [])).catch(() => {});
+  }, []);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  // Older leads may hold a value outside the new lists (Hot / Warm / Cold, other kW); keep it selectable.
+  const temperatureOptions = !form.temperature || TEMPERATURES.includes(form.temperature) ? TEMPERATURES : [...TEMPERATURES, form.temperature];
+  const brandOptions = !form.brand || brands.includes(form.brand) ? brands : [...brands, form.brand];
+  const kwOptions = !form.kwWanted || KW_OPTIONS.some(([v]) => v === String(form.kwWanted)) ? KW_OPTIONS : [...KW_OPTIONS, [String(form.kwWanted), `${form.kwWanted} kW`]];
 
   function captureLocation() {
     setLocationError("");
@@ -79,6 +89,7 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
           <Select label="Lead Source" required value={form.source} options={SOURCES} onChange={(v) => set("source", v)} />
           <Select label="State" required value={form.state} options={["Chhattisgarh", "Odisha"]} onChange={(v) => set("state", v)} />
           <Field label="Village" value={form.village} onChange={(v) => set("village", v)} />
+          <Field label="BP SC Number" value={form.bpScNumber} onChange={(v) => set("bpScNumber", v)} />
           <label className="block">
             <Label>Live Location</Label>
             <button type="button" disabled={readOnly || locationLoading} onClick={captureLocation} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-brand px-3 text-sm font-semibold text-brand-dark transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60">
@@ -101,8 +112,15 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
         <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Initial requirement</legend>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Monthly Bill" type="number" value={form.monthlyBill} onChange={(v) => set("monthlyBill", v)} />
-          <Field label="Required System (kW)" type="number" step="0.1" value={form.kwWanted} onChange={(v) => set("kwWanted", v)} />
-          <Select label="Lead Temperature" required value={form.temperature} options={["Hot", "Warm", "Cold"]} onChange={(v) => set("temperature", v)} />
+          <Select label="Required System (kW)" value={form.kwWanted ? String(form.kwWanted) : ""} options={kwOptions} onChange={(v) => set("kwWanted", v)} />
+          <Select label="Product Interested" value={form.productInterested} options={["Hybrid", "On-grid"]} onChange={(v) => set("productInterested", v)} />
+          <Select label="Brand" value={form.brand} options={brandOptions} onChange={(v) => set("brand", v)} />
+          <Select label="Pricing" value={form.pricing} options={["CL", "ML"]} onChange={(v) => set("pricing", v)} />
+          <Select label="Lead Temperature" required value={form.temperature} options={temperatureOptions} onChange={(v) => set("temperature", v)} />
+          <label className="block sm:col-span-2 lg:col-span-3">
+            <Label>Remark</Label>
+            <textarea className="field min-h-20 resize-y py-2" value={form.remark ?? ""} onChange={(event) => set("remark", event.target.value)} />
+          </label>
         </div>
       </fieldset>
       {lead && !readOnly && (

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { CaseSummary, Pill } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
+import CaseDetails from "@/components/steps/CaseDetails";
+import { importantDetails } from "@/lib/caseDetails";
 
 const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 
@@ -44,6 +46,7 @@ export default function BalanceClearanceForm({ row, readOnly, onSubmit, onCancel
   return (
     <form onSubmit={submit} className="space-y-6">
       <CaseSummary row={row} />
+      <CaseDetails items={importantDetails(row, "balanceClearance")} />
       <div className="grid gap-3 sm:grid-cols-3">
         <AmountCard label="Total Amount to Collect" value={totalAmount} tone="slate" />
         <AmountCard label="Amount Received" value={received} tone="green" />

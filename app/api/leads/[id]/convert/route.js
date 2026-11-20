@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { readCases, saveCase } from "@/lib/store";
 import { buildCaseRecord } from "@/lib/caseRecord";
-import { hasCompletePacket, getLead, saveLead } from "@/lib/leads";
+import { getLead, saveLead } from "@/lib/leads";
 import { getSession, requireLeadWriter } from "@/lib/session";
+import { canSee } from "@/lib/assign";
+import { canSeeRecord } from "@/lib/defaultAssignees";
 
 export async function POST(_request, { params }) {
   const guard = await requireLeadWriter();
   if (guard.error) return guard.error;
   const { id } = await params;
   const lead = await getLead(id);
-  if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  if (!lead || !(await canSeeRecord(guard.user, lead))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   if (lead.status === "converted") {
     return NextResponse.json({ error: "This lead is already converted" }, { status: 409 });
   }
@@ -25,12 +27,7 @@ export async function POST(_request, { params }) {
   if (!lead.bpScNumber) {
     return NextResponse.json({ error: "BP SC Number is required before confirmation" }, { status: 400 });
   }
-  if (!hasCompletePacket(lead)) {
-    return NextResponse.json(
-      { error: "Aadhaar, PAN, Passbook, Electricity Bill and Terrace Geotag must be collected before confirmation" },
-      { status: 400 }
-    );
-  }
+  // The handover documents (Aadhaar, PAN, Passbook, Bill, Terrace Geotag) are optional here; Document Receive collects them.
   if (!lead.paymentMode) {
     return NextResponse.json({ error: "Select a payment mode before confirmation" }, { status: 400 });
   }

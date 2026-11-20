@@ -4,6 +4,8 @@ import { ALL_STEPS, STAGE_LABEL, newSchedule } from "@/lib/workflow";
 import { ISSUE_TYPES, issueFilePattern } from "@/lib/issues";
 import { getSession } from "@/lib/session";
 import { canSubmitStep } from "@/lib/access";
+import { canSee, assigneeIds, NO_ASSIGNMENT } from "@/lib/assign";
+import { canSeeRecord } from "@/lib/defaultAssignees";
 
 // Report an issue from the case's current step. The case goes back to Document
 // Receive, where the issue is shown; after it is resolved there the
@@ -13,7 +15,7 @@ export async function POST(request, { params }) {
   const me = await getSession();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const row = await getCase(id);
-  if (!row) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!row || !(await canSeeRecord(me, row))) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
   const from = row.stage;
   if (from === "nameCheck" || from === "documentReceive" || !ALL_STEPS.includes(from)) {
@@ -47,6 +49,7 @@ export async function POST(request, { params }) {
   row.issue = issue;
   row.issues = [...(row.issues ?? []), issue];
   row.stage = "documentReceive";
+  if (assigneeIds(row).length) Object.assign(row, NO_ASSIGNMENT);
   row.schedule = { ...row.schedule, documentReceive: newSchedule("documentReceive", now) };
   await saveCase(row);
   return NextResponse.json(row);

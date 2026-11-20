@@ -2,6 +2,8 @@
 //   1. npm run build && npx next start -p 3101      (or any running copy of the app)
 //   2. node scripts/seed-demo-data.mjs http://localhost:3101
 // Needs the team logins from scripts/seed-team-users.mjs. Existing records are never touched.
+// Employees only see work assigned to them, so the admin assigns each case to the user who
+// submits the next step (and finally to the owner of the page the case ends on).
 // Created ids are written to scripts/.demo-seed-ids.json so they can be removed again.
 import fs from "fs/promises";
 
@@ -105,6 +107,18 @@ const WHO = {
 
 let files; // { png, pdf } uploaded attachments
 
+// username -> user id, for the admin's assign calls
+let userIds = null;
+async function assignTo(username, type, id) {
+  if (!userIds) {
+    const list = await api("admin", "GET", "/api/assignees");
+    userIds = Object.fromEntries(list.map((u) => [u.name.toLowerCase().split(" ")[0], u.id]));
+  }
+  const userId = userIds[username];
+  if (!userId) throw new Error(`no user for ${username}`);
+  await api("admin", "POST", "/api/assign", { type, ids: [id], userId });
+}
+
 function payload(step, c) {
   const done = { workStatus: "Done", remark: "" };
   const f = (u) => [{ url: u.url, name: u.name }];
@@ -134,7 +148,7 @@ function payload(step, c) {
     case "subsidyChequeReady":
       return { ...done, balanceAmount: c.price - 78000, balanceReceived: c.price - 78000, centralChequeNo: `CH-${c.bp.slice(-5)}1`, stateChequeNo: `CH-${c.bp.slice(-5)}2`, agreementConfirmed: "Yes" };
     case "cashReceipt":
-      return { ...done, receiptNo: `RCT-${c.bp.slice(-5)}`, amountReceived: c.mode === "Loan" ? Math.round(c.price * 0.75) : Math.round(c.price * 0.9), receiptDate: day(8), signedBy: "Chetan", approver: c.cashPaid === "No" ? "MD" : "", receiptFiles: f(files.pdf) };
+      return { ...done, receiptNo: `RCT-${c.bp.slice(-5)}`, amountReceived: c.mode === "Loan" ? Math.round(c.price * 0.75) : Math.round(c.price * 0.9), receiptDate: day(8), signedBy: "Chetan", receiptStatus: c.cashPaid === "No" ? "Dispatch Without Cash or Down Payment" : "90% Cash Received", ...(c.cashPaid === "No" ? { remark: "MD approved dispatch before payment" } : {}), receiptFiles: f(files.pdf) };
     case "dispatch": case "cashDispatch":
       return { ...done, dispatchDate: day(7), materialList: `${c.kw} kW rooftop kit as per survey report`, dispatchedBy: "Sameer", deliveredBy: "Jitendra",
         ...(odisha ? { tpwodlReference: `TPW-${c.bp.slice(-6)}`, meterChargePaidDate: day(8) } : {}) };
@@ -165,7 +179,7 @@ function payload(step, c) {
 const leadBody = (n, extra = {}) => ({
   customerName: n.name, mobile: n.mobile, village: n.village, address: `${n.village}, ${n.branch}`, state: BRANCHES[n.branch].state,
   email: `${n.name.split(" ")[0].toLowerCase()}${n.i}@gmail.com`, source: "Field Visit", monthlyBill: 2400, kwWanted: n.kw,
-  productCode: `PMSG-${n.kw}KW`, temperature: "Warm", branch: n.branch, dealer: "Bantu Sahu", liaisoning: "Satya Kumar Sahu",
+  bpScNumber: n.bp, productCode: `PMSG-${n.kw}KW`, temperature: "Warm", branch: n.branch, dealer: "Bantu Sahu", liaisoning: "Satya Kumar Sahu",
   latitude: 21.59 + n.i / 1000, longitude: 83.08 + n.i / 1000, locationAccuracy: 12, locationCapturedAt: new Date().toISOString(), ...extra,
 });
 const person = (i, branch) => {
@@ -219,6 +233,7 @@ async function main() {
   await api("ankita", "POST", `/api/leads/${l4.id}/send-quotation`);
   const l5 = await newLead(L(4), { temperature: "Cold" });
   await api("ankita", "PUT", `/api/leads/${l5.id}`, { ...l5, action: "lost", lostReason: "Customer already registered with another vendor (H02)" });
+  for (const l of [l1, l2, l3, l4]) await assignTo("ankita", "lead", l.id);
   created.leads.push(l1.id, l2.id, l3.id, l4.id, l5.id);
   console.log("leads:", created.leads.join(" "));
   }
@@ -241,8 +256,19 @@ async function main() {
   // 3. move each case to its page (several at a time; each case's own steps stay in order)
   async function advance({ id, row, target, ctx }) {
     for (let guard = 0; guard < 45; guard++) {
-      if (row.stage === target) return `${id} at ${target}`;
+      if (row.stage === target) {
+        await assignTo(WHO[target] ?? "admin", "case", id); // the person who works this page
+        return `${id} at ${target}`;
+      }
+      // Site Survey runs in parallel with Payment Work Start and must be filled before dispatch: fill it as the payment steps begin.
+      const surveyOpen = row.steps?.login?.status === "done" && row.steps?.siteSurvey?.status !== "done";
+      if (target === "siteSurvey" && surveyOpen) return `${id} at siteSurvey (parallel)`;
+      if (surveyOpen && !["documentReceive", "nameCheck", "login", "paymentWorkStart"].includes(row.stage)) {
+        await api(WHO.siteSurvey, "POST", `/api/cases/${id}/submit`, { step: "siteSurvey", data: payload("siteSurvey", ctx) });
+        row = await api("admin", "GET", `/api/cases`).then((all) => all.find((c) => c.id === id));
+      }
       const step = row.stage;
+      await assignTo(WHO[step] ?? "admin", "case", id);
       row = await api(WHO[step] ?? "admin", "POST", `/api/cases/${id}/submit`, { step, data: payload(step, ctx) });
     }
     throw new Error(`${id}: did not reach ${target}`);

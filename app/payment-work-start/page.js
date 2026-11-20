@@ -17,7 +17,7 @@ export default function PaymentWorkStartPage() {
     <StepPage
       stepKey="paymentWorkStart"
       title="Payment Work Start"
-      subtitle="After Site Survey · Start the payment process by confirming Cash or Loan, work status and corridor."
+      subtitle="Opens with the Survey List after Login PMSG · Start the payment process by confirming Cash or Loan, work status and corridor."
       columns={columns}
       historyColumns={OUT.paymentWorkStart}
       Form={PaymentWorkStartForm}

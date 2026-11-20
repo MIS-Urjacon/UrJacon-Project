@@ -255,8 +255,36 @@ export const C = {
     },
   },
   approver: {
-    label: "SN - Approver",
+    label: "Approver",
     cell: (r) => step(r, "cashApproval")?.approver || dash,
+  },
+  paymentSent: {
+    label: "Payment Details Sent",
+    cell: (r) => {
+      const sent = r.paymentDetailsSent ?? [];
+      if (!sent.length) return dash;
+      const last = sent.at(-1);
+      return <Stack top={day(last.at)} bottom={`${last.by}${sent.length > 1 ? ` · ${sent.length}x` : ""}`} />;
+    },
+  },
+  approvalImage: {
+    label: "Approval Image",
+    cell: (r) => {
+      const files = step(r, "cashApproval")?.images ?? [];
+      if (!files.length) return dash;
+      return (
+        <div className="flex gap-1.5">
+          {files.map((file) => (
+            <a key={file.url} href={file.url} target="_blank" rel="noreferrer" title={file.name} className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+              {file.url.endsWith(".pdf") ? "PDF" : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={file.url} alt={file.name || "Approval"} className="h-full w-full object-cover" />
+              )}
+            </a>
+          ))}
+        </div>
+      );
+    },
   },
   // Installation flow
   installer: {
@@ -313,9 +341,9 @@ export const OUT = {
   firstInstallment: [C.firstAmount, remarkCol("firstInstallment")],
   receiveDp: [C.dpAmount, remarkCol("receiveDp")],
   dispatch: [remarkCol("dispatch")],
-  cashAskPayment: [remarkCol("cashAskPayment")],
+  cashAskPayment: [C.paymentSent, remarkCol("cashAskPayment")],
   cashPaymentReceived: [C.payRecv, remarkCol("cashPaymentReceived")],
-  cashApproval: [C.approver, remarkCol("cashApproval")],
+  cashApproval: [C.approver, C.approvalImage, remarkCol("cashApproval")],
   cashDispatch: [remarkCol("cashDispatch")],
   assignInstaller: [C.installer, remarkCol("assignInstaller", "Working Remarks")],
   inspectionFile: [remarkCol("inspectionFile")],

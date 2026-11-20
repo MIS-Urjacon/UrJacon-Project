@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getLead, saveLead } from "@/lib/leads";
 import { getSession, requireLeadWriter } from "@/lib/session";
+import { canSee, assigneeIds, NO_ASSIGNMENT } from "@/lib/assign";
+import { canSeeRecord } from "@/lib/defaultAssignees";
 import { quotationVersion, withQuotationSnapshot } from "@/lib/quotation";
 
 export async function POST(request, { params }) {
@@ -8,7 +10,7 @@ export async function POST(request, { params }) {
   if (guard.error) return guard.error;
   const { id } = await params;
   const lead = await getLead(id);
-  if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  if (!lead || !(await canSeeRecord(guard.user, lead))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   if (lead.status !== "open" || !["quotation", "contacted"].includes(lead.leadStage)) {
     return NextResponse.json({ error: "Only an open lead with a sent quotation can be revised" }, { status: 409 });
   }
@@ -29,6 +31,7 @@ export async function POST(request, { params }) {
   const updated = {
     ...lead,
     leadStage: "quotation",
+    ...(assigneeIds(lead).length ? NO_ASSIGNMENT : {}),
     quotationRevision: quotationVersion(lead) + 1,
     quotationRevisionReason: revisionReason,
     quotationRevisions: archived,

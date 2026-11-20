@@ -84,29 +84,43 @@ receiving a BP / SC Number or entering operations.
 - **Call Tracker (`/call-tracker`, Step 2):** Each Call / Visit / WhatsApp entry
   records customer response, remark, user, temperature and next call time.
   Call-back stays here; an interested customer moves to Quotation. Document
-  receipt is not decided here.
+  receipt is not decided here. **Visit required** needs the visit date and **Visit By** (an active
+  employee, `GET /api/staff`); the lead stays in Call Tracker Pending and opens next time with
+  Contact Type = Visit. Every interaction (call back, visit required with who went, visit
+  result, quotation sent) is kept in the lead's interaction history, shown in full in the popup.
+  In Supabase the per-interaction Visit By is kept in the lead `extra` (`followUpVisitBy`).
 - **Quotation & Documents (`/quotation`, Step 3):** Captures quotation reference,
   entity, system type, DCR/NDCR, On-grid/Hybrid, kW, price and subsidy. The
   system generates a printable quotation preview from these fields; supporting
-  images/PDFs are optional Storage attachments. The quotation is first saved as
-  a draft and then sent. A sent quotation can be revised only after recording a
+  images/PDFs are optional Storage attachments. The quotation is saved and sent in one step (Submit). The printed quotation follows the owner's
+  format (sample URJ/Q/26-27/0107): `lib/quotationFormat.js` (fields, defaults, payment terms
+  per mode, styles) and `components/leads/QuotationSummary.js` (the document). Header with
+  Ref / Date / Valid till, Prepared for / by, System (capacity, panels, inverter, included,
+  meter), Price (price incl. GST, central and state subsidy, cost after subsidy), payment terms
+  and signatures. Empty inverter / meter / panel count / included / terms use the defaults. A sent quotation can be revised only after recording a
   reason; the original and every sent R1/R2 version remain in revision history.
   `POST
   /api/leads/[id]/send-quotation` is the delivery integration point: it records
   manual delivery now and will send the WhatsApp message when that integration
   is connected. **The Quotation page is only for making quotations.** Call
-  Tracker "Send quotation" puts the lead in Quotation Pending; after Send the lead
+  Tracker has no "Send quotation" response. Quotation > Pending has no table: the
+  quotation format is always shown (greyed out until a lead is chosen). The user selects
+  a **BP SC Number** and that lead's details (customer, contact, source, brand, system)
+  fill the quotation (`components/leads/QuotationWorkspace.js`); leads that are open,
+  have a BP SC Number and no sent quotation (or a draft / revision) can be chosen. There is
+  no Save Draft: **Submit** saves and sends the quotation in one step; after Submit the lead
   returns to Call Tracker (stage `contacted`, quotation sent) and shows the latest
   quotation there. The customer response is taken only in Call Tracker: **Call back
   later**, **Document given** (handover packet, then the case starts at Document
-  Verification & Name Check) or **Not interested**. To change a sent quotation, open
-  it from Quotation > History and Start Revision (reason required): the lead returns
-  to Quotation Pending as R1/R2, and after it is sent again Call Tracker shows the
-  revised version. Every sent version stays in revision history.
+  Verification & Name Check) or **Not interested**. To change a sent quotation, click **Revise** on its
+  row in Quotation > History: the Pending tab opens with that lead's quotation filled
+  in and a required Revision Reason. On Submit the sent version is archived (R1/R2),
+  the corrected one is sent, and Call Tracker and every page show the latest version.
+  Cancel leaves the sent quotation unchanged. Every sent version stays in revision history.
 - **Lost:** A reason is compulsory. Lost leads stay in history and can be
   reopened.
 - **Handover to Document Verification & Name Check:** Quotation reference, BP / SC Number, Cash/Loan mode
-  and Aadhaar, PAN, Passbook and Electricity Bill are compulsory. Handover links
+  are compulsory. The handover document checkboxes (Aadhaar, PAN, Passbook, Electricity Bill, Terrace Geotag) are optional; Document Receive collects them. Handover links
   a new case through `leadId`; the case starts at Name Check. The expected
   payment mode is carried as a preference and pre-selected at Payment Work
   Start, where it can still be corrected.
@@ -119,12 +133,15 @@ Defined in `lib/workflow.js` (`FLOW`). A case is in exactly one **stage**.
 | # | Step key | Page (route) | Popup fields | Moves on when | Next |
 |---|----------|--------------|--------------|---------------|------|
 | 4–6 | `nameCheck` | `/name-check` | Received Aadhaar, PAN, Passbook and Bijli Bill files; name and Proper/Correction Required check on each; Tata/Non-Tata; correction type and reason | All 4 documents are saved, names match and every document is marked Proper; otherwise correction hold | Login PMSG |
-| 7 | `login` | `/login-pmsg` | Login Check in PMSG (Login Done / Login Hold), images (up to 5), remark | Login Done | Site Survey |
-| 8 | `siteSurvey` | `/site-survey` | Customer Name, Contact Number, Village (address), Survey Date, Surveyor Name | Valid submit | Payment Work Start |
+| 7 | `login` | `/login-pmsg` | Login Check in PMSG (Login Done / Login Hold), hold reason (H02 / H03, full text), retry date, remark (no image upload) | Login Done. **Login Hold sends the case back to Document Receive** (an issue is opened with the hold reason; Document Receive's default assignee gets it) and, once re-verified, it returns to Login PMSG | Site Survey |
+| 8 | `siteSurvey` (page name **Survey List**) | `/site-survey` | Customer Name, Contact Number, Village (address), Survey Date, Surveyor Name (dropdown of employees, `GET /api/staff`), Smart Meter, Material Needed; the popup also shows the important case details (address, route, system, panels, inverter, payment mode, application no., map link) | Valid submit | Payment Work Start |
 | After 8 | `paymentWorkStart` | `/payment-work-start` | Cash or Loan, Status (Done / Not Done), Corridor (Regular / Special) | Status = Done | **Loan** goes to Bank File Ready. **Cash** goes to Ask 90% Payment for Dispatch |
 
-The core handoff is strictly sequential: **Document Verification → Login PMSG →
-Site Survey → Payment Work Start**. The Site Survey address, contact number,
+The core handoff is **Document Verification → Login PMSG**; once Login is done the case is on
+**both Site Survey and Payment Work Start** (parallel: the case stage moves to Payment Work Start and the
+survey stays open on its own page, `surveyOpen(row)` in `lib/workflow.js`; the survey owner sees it through
+`lib/assign.js`). The survey can be filled any time before Dispatch, but **Loan Dispatch and Cash Dispatch are
+blocked until the Site Survey is done** (`lib/validate.js`; the dispatch popup shows a red notice). The Site Survey address, contact number,
 surveyor and survey date remain attached to the case and are displayed on both
 Loan Dispatch and Cash Dispatch pages.
 
@@ -221,6 +238,19 @@ with the link"). The sheet has Who / How / When per step:
 | 3 | `cashApproval` (Check for Approval) | `/cash-approval` | Chaitan | Get Director approval, register signed, for dispatch without payment | 16 | SN - Approver (text), Status, Remark |
 | 4 | `cashDispatch` (Dispatch) | `/cash-dispatch` | Manoj | Dispatch Form | 24 | Status, Remark (placeholder) |
 
+- **Ask 90% Payment popup**: Status is only "Send For Approval" (no Done / Not Done) and there is a
+  **Send payment details to customer** button (`POST /api/cases/[id]/send-payment-details`,
+  `components/steps/SendPaymentDetails.js`, message text in `lib/caseDetails.js`). It records each send on the
+  case (`paymentDetailsSent`, in `extra`) and opens WhatsApp with the message ready; it is the integration point
+  for direct WhatsApp delivery later.
+- **Important details** (`components/steps/CaseDetails.js`, content from `importantDetails(row, stepKey)` in
+  `lib/caseDetails.js`) are shown at the top of the step popups (simple steps, configured steps, Login,
+  90% Received, Balance Clearance, Warranty, plus the Document Receive / Survey List / Payment Work Start popups).
+- **Accounts Cash Receipt** (`cashReceipt`) has no Status / Hold Reason Code. A **Receipt Status** dropdown
+  (`RECEIPT_STATUS` in `lib/processConfig.js`) decides the result: **90% Cash Received** = proper, moves to
+  Dispatch; **Cash Below 90%** = hold (H11), stays in Pending (remark required); **Dispatch Without Cash or
+  Down Payment** = moves to Dispatch (H21), remark required (who approved, when the money is expected).
+  Fields: receipt no., amount, date, signed by, signed receipt, optional invoice.
 - **Branching**: step 2 answer **Yes** goes straight to step 4. **No** goes to
   step 3 first, then step 4. Yes/No is an answer, never a hold. Steps 1, 3, 4
   use Status Done / Not Done like the loan steps (Not Done needs a Remark and
@@ -257,7 +287,10 @@ with the link"). The sheet has Who / How / When per step:
   `INTAKE_STEP` / `nextStage` in `lib/workflow.js` send it to Name Check.
 - **Document Receive does the document work**: receive and upload Aadhaar, PAN, Passbook and
   Bijli Bill, name on each, Proper / Correction Required, Tata or Non-Tata, correction type,
-  Received Through and Received Date. A correction keeps the case here on hold; only all
+  Received Through and Received Date. It also has **Payment Mode (Cash / Loan / Subsidy Cheque for
+  Odisha)**, an optional **Terrace geotag photo** upload, and a read-only "Lead & quotation details"
+  panel (pricing, subsidy, system, brand, dealer, route, contact; older cases read it from their lead).
+  Payment Work Start keeps its own Payment Mode field and pre-fills it from Document Receive. A correction keeps the case here on hold; only all
   proper documents move on. The data is saved under `steps.documentReceive`; use
   `docData(row)` (older cases saved it under `nameCheck`) to read it.
 - **Document Verification (`nameCheck`) only verifies**: the verifier sees the received
@@ -267,8 +300,10 @@ with the link"). The sheet has Who / How / When per step:
 
 ### Issue Report (every step after Document Verification)
 
-- Every step page except Document Verification has a **Report Issue** button next to
-  Update in the Pending tab (`components/steps/IssueReportForm.js`, shown by `StepPage`).
+- Every step page after Document Verification (not Document Receive / Verification) has a
+  checkbox in the Pending Action column; ticking rows shows **Report Issue (N)** in the
+  table toolbar (next to Assign for admin / management), which opens
+  `components/steps/IssueReportForm.js` for all ticked cases. Update stays its own button.
   Fields: Issue Type (`lib/issues.js`), Issue Details, optional files.
 - `POST /api/cases/[id]/issue` stores `row.issue` (latest) and `row.issues` (history) in
   the case `extra` jsonb (no new column), moves the case to `documentReceive` and resets its
@@ -277,6 +312,33 @@ with the link"). The sheet has Who / How / When per step:
 - After the fix the case goes Document Receive -> Document Verification as usual;
   verifying it as Done resolves the issue and returns the case to the step it was
   reported from (`issue.fromStep`), not to Login.
+
+### Assign work (every lead and case page)
+
+- Admin and management see a **checkbox** in the Action column of every Pending table
+  (Leads Open tab, Call Tracker, Quotation, every case step page) with a select-all
+  checkbox in the header. Tick one or many rows and use **Assign (N)** in the toolbar
+  (`components/BulkAssign.js`, `components/AssignDialog.js`) to pick an active employee, or
+  "Unassigned". Other roles see no checkboxes. Every table has an **Assigned To** column.
+- `POST /api/assign` stores `assignedTo` (user id), `assignedToName`, `assignedBy`,
+  `assignedAt` on the lead / case (`extra` jsonb, no new column). `GET /api/assignees`
+  lists employees (admin / management only).
+- **Automatic assignment**: work with no explicit assignee belongs to every employee who has
+  access to the page it is on (role pages / custom Page access), so all of them see it and the
+  "Assigned To" column shows them as "Auto · page access".
+- **Default assignees** (Settings > Assignees, admin only): each page can have default employees
+  (`lib/defaultAssignees.js`, `/api/assignee-defaults`, stored in `urjacon_masters` as type
+  `assignee:<page slug>`, no new table). Work with no explicit assignee that is on such a page belongs
+  to them however it got there (new, next step, or back from an issue); only they, admin and management
+  see it. No default = the automatic rule. Changing the tab applies at once. Inactive users are ignored.
+- **Explicit assignment**: admin / management can tick **one or several** employees in the
+  Assign dialog (`assignedToIds`). Only those employees, admin and management see the work.
+  Ticking nobody returns to automatic. When the work moves to its next step (step submit,
+  Report Issue, lead stage change, quotation send / revise) the explicit assignment is cleared
+  and the automatic rule applies again. A converted lead's case starts automatic.
+- **Visibility** (`lib/assign.js`: `canAssign`, `canSee`, `withAssignees`): admin and management
+  see everything. Enforced in `GET /api/cases`, `GET /api/leads` (so Dashboard and Reports
+  follow) and in the step submit, issue and lead write routes.
 
 BP SC Number remains unique across all converted cases.
 
@@ -411,8 +473,9 @@ Light theme only (`color-scheme: light`). Clean, professional dashboard look.
     Bank, Responsible Person, Installer (`lib/masterTypes.js`, stored in
     `data/masters.json`). Branch, Dealer, Liaisoning and Product Code feed the
     **Lead** form suggestions.
-    **Not wired yet**: the Responsible Person dropdown on File Submission
-    (still the fixed list in `lib/loanFields.js`) and other dropdowns.
+    The Responsible Person dropdown on File Submission now reads this master
+    (`master: "responsiblePerson"` in `lib/loanFields.js`). **Not wired yet**: other dropdowns.
+    The Assign dialog lists real users from the database (`/api/assignees`), never a fixed list.
 - Step submits record the signed-in user's name in `submittedBy`.
 - The app frame (sidebar + top bar) is `components/Shell.js`; the login page is
   shown without it.

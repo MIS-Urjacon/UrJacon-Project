@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { cleanLeadInput, getLead, validateLead, saveLead, removeLead } from "@/lib/leads";
 import { getSession, requireAdmin } from "@/lib/session";
 import { requireLeadWriter } from "@/lib/session";
+import { canSee, assigneeIds, NO_ASSIGNMENT } from "@/lib/assign";
+import { canSeeRecord } from "@/lib/defaultAssignees";
 
 export async function PUT(request, { params }) {
   const guard = await requireLeadWriter();
@@ -13,7 +15,7 @@ export async function PUT(request, { params }) {
   if (error) return NextResponse.json({ error }, { status: 400 });
 
   const current = await getLead(id);
-  if (!current) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  if (!current || !(await canSeeRecord(guard.user, current))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   if (current.status === "converted") {
     return NextResponse.json({ error: "Converted leads cannot be edited" }, { status: 409 });
   }
@@ -41,6 +43,7 @@ export async function PUT(request, { params }) {
       outcome: (followUp.outcome ?? "").toString().trim(),
       nextFollowUp: input.nextFollowUp,
       remark: (followUp.remark ?? "").toString().trim(),
+      ...(followUp.visitBy ? { visitBy: followUp.visitBy.toString().trim().slice(0, 120) } : {}),
       by: user?.name ?? "Unknown",
     });
   }
@@ -56,6 +59,10 @@ export async function PUT(request, { params }) {
     updatedBy: user?.name ?? "Unknown",
     followUps,
   };
+  if (input.leadStage !== current.leadStage && assigneeIds(current).length) Object.assign(updated, NO_ASSIGNMENT);
+  if (current.issue?.open && hasFollowUp) {
+    updated.issue = { ...current.issue, open: false, resolvedAt: now, resolvedBy: user?.name ?? "Unknown" };
+  }
   await saveLead(updated);
   return NextResponse.json(updated);
 }

@@ -21,7 +21,7 @@ export default function ReferenceStepPage({ stepKey }) {
       const entry = row.steps?.[stepKey];
       if (!entry) return "-";
       const first = config.fields.find((item) => entry[item.key] && item.type !== "files");
-      return <div className="max-w-[240px] leading-tight"><Pill color={entry.status === "done" ? "green" : "red"}>{entry.status === "done" ? "Completed" : entry.holdCode || "On hold"}</Pill>{first && <div className="mt-1 text-xs text-slate-500">{first.label}: {entry[first.key]}</div>}{entry.holdCode && <div className="mt-1 text-xs text-rose-600">{HOLD_REASONS[entry.holdCode]}</div>}</div>;
+      return <div className="max-w-[240px] leading-tight"><Pill color={entry.status === "done" ? "green" : "red"}>{entry.status === "done" ? "Completed" : entry.holdCode || "On hold"}</Pill>{entry.receiptStatus && <div className="mt-1 text-xs font-semibold text-slate-700">{entry.receiptStatus}</div>}{first && <div className="mt-1 text-xs text-slate-500">{first.label}: {entry[first.key]}</div>}{entry.holdCode && <div className="mt-1 text-xs text-rose-600">{HOLD_REASONS[entry.holdCode]}</div>}</div>;
     },
   }];
   const Form = stepKey === "balanceClearance" ? BalanceClearanceForm : ReferenceStepForm;

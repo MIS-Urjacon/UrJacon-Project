@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { DateCell, Pill } from "@/components/ui";
 import { CASH_FLOW, CLOSURE_FLOW, FLOW, INSTALL_FLOW, LOAN_FLOW, STAGE_LABEL, TAT_DAYS } from "@/lib/workflow";
-import { LEAD_STAGE_LABEL } from "@/lib/leadConstants";
+import { leadStageLabel } from "@/lib/leadConstants";
 import { STEPS } from "@/lib/steps";
 
 const GROUPS = [
@@ -33,7 +33,7 @@ const GROUPS = [
 const CORE_FLOW = [
   { label: "Document Verification", note: "All documents proper", href: "/name-check" },
   { label: "Login PMSG", note: "Login completed", href: "/login-pmsg" },
-  { label: "Site Survey", note: "Site and contact captured", href: "/site-survey" },
+  { label: "Survey List", note: "Site and contact captured", href: "/site-survey" },
   { label: "Payment Work Start", note: "Cash or Loan selected", href: "/payment-work-start" },
 ];
 
@@ -227,7 +227,7 @@ function CoreFlow() {
           </div>
         ))}
       </div>
-      <div className="mt-2 text-xs text-sky-700">Site Survey details continue with the case and are shown again at Dispatch.</div>
+      <div className="mt-2 text-xs text-sky-700">Survey List details continue with the case and are shown again at Dispatch.</div>
     </div>
   );
 }
@@ -271,7 +271,7 @@ function summarize(leads, cases, asOf) {
     ...overdueCases.filter((row) => !hasOpenIssue(row) && !holdCases.some((hold) => hold.id === row.id)).map((row) => ({ key: `overdue-${row.id}`, type: "Past planned date", color: "red", title: row.customerName, meta: `${row.id} · ${STAGE_LABEL[row.stage]}`, time: row.schedule?.[row.stage]?.plannedDate, href: stageHref(row.stage) })),
   ].sort((a, b) => new Date(a.time || 0) - new Date(b.time || 0));
 
-  const leadActivity = leads.map((lead) => ({ key: `lead-${lead.id}-${lead.updatedAt}`, title: lead.status === "converted" ? "Lead converted to case" : lead.status === "lost" ? "Lead marked lost" : "Lead updated", detail: lead.status === "open" ? LEAD_STAGE_LABEL[lead.leadStage] : lead.status, customer: lead.customerName, reference: lead.id, owner: lead.updatedBy || lead.createdBy, time: lead.updatedAt || lead.timestamp, href: "/leads" }));
+  const leadActivity = leads.map((lead) => ({ key: `lead-${lead.id}-${lead.updatedAt}`, title: lead.status === "converted" ? "Lead converted to case" : lead.status === "lost" ? "Lead marked lost" : "Lead updated", detail: lead.status === "open" ? leadStageLabel(lead) : lead.status, customer: lead.customerName, reference: lead.id, owner: lead.updatedBy || lead.createdBy, time: lead.updatedAt || lead.timestamp, href: "/leads" }));
   const caseActivity = cases.flatMap((row) => Object.entries(row.steps ?? {}).filter(([, entry]) => entry?.submittedAt && !entry.derived).map(([step, entry]) => ({ key: `${row.id}-${step}-${entry.submittedAt}`, title: `${STAGE_LABEL[step] ?? step} completed`, detail: entry.status === "hold" ? "Saved on hold" : "Moved to next stage", customer: row.customerName, reference: row.id, owner: entry.submittedBy, time: entry.submittedAt, href: stageHref(step) })));
   const recentActivity = [...leadActivity, ...caseActivity].filter((item) => item.time).sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
   const conversionRate = leads.length ? Math.round((convertedLeads.length / leads.length) * 100) : 0;

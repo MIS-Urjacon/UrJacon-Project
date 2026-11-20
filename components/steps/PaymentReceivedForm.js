@@ -3,6 +3,8 @@ import { useState } from "react";
 import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
+import CaseDetails from "@/components/steps/CaseDetails";
+import { importantDetails } from "@/lib/caseDetails";
 
 // Cash flow: "90% Payment Received?" is a Yes / No answer.
 // Yes -> Dispatch. No -> Check for Approval (Director approval to dispatch without payment).
@@ -27,6 +29,7 @@ export default function PaymentReceivedForm({ row, readOnly, onSubmit, onCancel 
   return (
     <form onSubmit={submit} className="space-y-6">
       <CaseSummary row={row} />
+      <CaseDetails items={importantDetails(row, "cashPaymentReceived")} />
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <Label required>90% Payment Received?</Label>

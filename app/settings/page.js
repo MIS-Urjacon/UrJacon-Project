@@ -2,10 +2,12 @@
 import { useState } from "react";
 import UsersTab from "@/components/settings/UsersTab";
 import MastersTab from "@/components/settings/MastersTab";
+import AssigneesTab from "@/components/settings/AssigneesTab";
 
 const TABS = [
   ["users", "User Management"],
   ["masters", "System Masters"],
+  ["assignees", "Assignees"],
 ];
 
 export default function SettingsPage() {
@@ -33,7 +35,7 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
-        {tab === "users" ? <UsersTab /> : <MastersTab />}
+        {tab === "users" ? <UsersTab /> : tab === "masters" ? <MastersTab /> : <AssigneesTab />}
       </section>
     </div>
   );

@@ -15,7 +15,7 @@ const baseColumns = [
 
 // Build each form once (module level) so its identity stays stable across renders.
 const FORMS = {
-  cashAskPayment: makeSimpleForm({ stepKey: "cashAskPayment" }),
+  cashAskPayment: makeSimpleForm({ stepKey: "cashAskPayment", statuses: ["Send For Approval"] }),
   cashPaymentReceived: PaymentReceivedForm,
   cashApproval: makeSimpleForm({ stepKey: "cashApproval", extra: EXTRA_FIELDS.cashApproval }),
   cashDispatch: makeSimpleForm({ stepKey: "cashDispatch" }),

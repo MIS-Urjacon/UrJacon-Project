@@ -46,7 +46,12 @@ export async function PUT(request, { params }) {
     user.pages = pages;
   }
   if (activeAdmins(users) < 1) return bad("At least one active admin is required");
-  await saveUser(user);
+  try {
+    await saveUser(user);
+  } catch (e) {
+    // e.g. the `pages` column is missing: answer with a readable message instead of an empty 500
+    return NextResponse.json({ error: e.message || "Could not save the user" }, { status: 500 });
+  }
   return NextResponse.json(publicUser(user));
 }
 

@@ -58,6 +58,11 @@ export async function POST(request) {
     passwordHash: hashPassword(password),
     createdAt: new Date().toISOString(),
   };
-  await saveUser(user);
+  try {
+    await saveUser(user);
+  } catch (e) {
+    // e.g. the `pages` column is missing: answer with a readable message instead of an empty 500
+    return NextResponse.json({ error: e.message || "Could not save the user" }, { status: 500 });
+  }
   return NextResponse.json(publicUser(user), { status: 201 });
 }

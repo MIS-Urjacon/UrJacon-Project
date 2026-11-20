@@ -1,14 +1,15 @@
 "use client";
 import { useState } from "react";
 import DropSelect from "@/components/Select";
-import FileUpload from "@/components/FileUpload";
+import { HOLD_REASONS } from "@/lib/processConfig";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
+import CaseDetails from "@/components/steps/CaseDetails";
+import { importantDetails } from "@/lib/caseDetails";
 
 export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
   const prev = row.steps?.login;
   const [loginCheck, setLoginCheck] = useState(prev?.loginCheck ?? "");
-  const [images, setImages] = useState(prev?.images ?? []);
   const [remark, setRemark] = useState(prev?.remark ?? "");
   const [applicationNo, setApplicationNo] = useState(prev?.applicationNo ?? "");
   const [holdCode, setHoldCode] = useState(prev?.holdCode ?? "");
@@ -23,7 +24,7 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
     if (loginCheck === "Login Done" && !applicationNo.trim()) return setErr("Enter the PMSG Application No.");
     if (loginCheck === "Login Hold" && !holdCode) return setErr("Select the hold reason");
     setSaving(true);
-    const msg = await onSubmit({ loginCheck, applicationNo, holdCode, retryDate, images, remark });
+    const msg = await onSubmit({ loginCheck, applicationNo, holdCode, retryDate, remark });
     setSaving(false);
     if (msg) setErr(msg);
   }
@@ -31,6 +32,7 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
   return (
     <form onSubmit={submit} className="space-y-5">
       <CaseSummary row={row} />
+      <CaseDetails items={importantDetails(row, "login")} />
       {prev?.status === "hold" && !readOnly && (
         <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Previously put on hold: {prev.remark}
@@ -50,11 +52,22 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
         </DropSelect>
       </label>
       {loginCheck === "Login Done" && <label className="block"><Label required>PMSG Application No.</Label><input className="field" disabled={readOnly} value={applicationNo} onChange={(event) => setApplicationNo(event.target.value)} /></label>}
-      {loginCheck === "Login Hold" && <div className="grid gap-4 sm:grid-cols-2"><label><Label required>Hold Reason</Label><DropSelect className="field" disabled={readOnly} value={holdCode} onChange={(event) => setHoldCode(event.target.value)}><option value="">Select</option><option value="H02">H02 · Already registered with another vendor</option><option value="H03">H03 · Call not connecting / OTP not shared</option></DropSelect></label><label><Label>Retry Date</Label><input type="date" className="field" disabled={readOnly} value={retryDate} onChange={(event) => setRetryDate(event.target.value)} /></label></div>}
-      <div>
-        <Label>Image upload</Label>
-        <FileUpload files={images} onChange={setImages} max={5} readOnly={readOnly} />
-      </div>
+      {loginCheck === "Login Hold" && (
+        <div className="space-y-4">
+          <label className="block">
+            <Label required>Hold Reason</Label>
+            <DropSelect className="field" disabled={readOnly} value={holdCode} onChange={(event) => setHoldCode(event.target.value)}>
+              <option value="">Select</option>
+              {["H02", "H03"].map((code) => <option key={code} value={code}>{`${code} · ${HOLD_REASONS[code]}`}</option>)}
+            </DropSelect>
+          </label>
+          <label className="block sm:max-w-xs">
+            <Label>Retry Date</Label>
+            <input type="date" className="field" disabled={readOnly} value={retryDate} onChange={(event) => setRetryDate(event.target.value)} />
+          </label>
+          {!readOnly && <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">On Login Hold the case goes back to Document Receive with this reason. After the documents are corrected and verified it returns to Login PMSG.</div>}
+        </div>
+      )}
       <label className="block">
         <Label required={loginCheck === "Login Hold"}>Remark</Label>
         <textarea
@@ -71,7 +84,7 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
         onCancel={onCancel}
         saving={saving}
         error={err}
-        submitLabel={loginCheck === "Login Hold" ? "Save as hold" : "Submit & send to Site Survey"}
+        submitLabel={loginCheck === "Login Hold" ? "Send back to Document Receive" : "Submit & send to Payment Work Start"}
       />
     </form>
   );

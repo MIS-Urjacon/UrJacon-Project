@@ -9,7 +9,7 @@ import { STAGE_LABEL } from "@/lib/workflow";
 
 // Popup to report a problem on any step after Document Verification. `onSubmit(data)`
 // returns an error string or null; the case then moves to Document Verification.
-export default function IssueReportForm({ row, stepKey, onSubmit, onCancel }) {
+export default function IssueReportForm({ row, stepKey, count = 1, stageLabel, notice, onSubmit, onCancel }) {
   const [type, setType] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState([]);
@@ -30,9 +30,10 @@ export default function IssueReportForm({ row, stepKey, onSubmit, onCancel }) {
   return (
     <form onSubmit={submit} className="space-y-6">
       <CaseSummary row={row} />
+      {count > 1 && <div className="-mt-3 text-sm font-medium text-slate-600">This issue will be reported for all {count} selected {stageLabel ? "leads" : "cases"}.</div>}
       <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Reported from <b>{STAGE_LABEL[stepKey]}</b>. The case will move to Document Receive with these
-        details. After it is fixed and verified, it returns to {STAGE_LABEL[stepKey]}.
+        Reported from <b>{stageLabel ?? STAGE_LABEL[stepKey]}</b>.{" "}
+        {notice ?? `The case will move to Document Receive with these details. After it is fixed and verified, it returns to ${STAGE_LABEL[stepKey]}.`}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">

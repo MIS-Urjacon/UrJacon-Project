@@ -5,11 +5,23 @@ import { FileText, X } from "lucide-react";
 import QuotationSummary from "@/components/leads/QuotationSummary";
 
 // Compact quotation icon for step popups; the full quotation opens only when clicked.
-export default function QuoteButton({ row }) {
+export default function QuoteButton({ row, title = "Quotation Received from Lead Management", compact = false }) {
   const [open, setOpen] = useState(false);
   if (!row.quotationReference) return null;
   return (
     <>
+      {compact ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title={`View quotation ${row.quotationReference}`}
+          aria-label="View quotation"
+          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50 px-2.5 text-xs font-semibold text-brand-dark transition hover:bg-brand-100"
+        >
+          <FileText size={13} />
+          {row.quotationReference}
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -20,13 +32,14 @@ export default function QuoteButton({ row }) {
         <FileText size={20} />
         <span className="text-[10px] font-semibold uppercase tracking-wide">Quote</span>
       </button>
-      {open && <QuotationPopup row={row} onClose={() => setOpen(false)} />}
+      )}
+      {open && <QuotationPopup row={row} title={title} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
 // The full quotation is opened on demand instead of taking up space in the popup.
-function QuotationPopup({ row, onClose }) {
+function QuotationPopup({ row, title, onClose }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "Escape") return;
@@ -53,7 +66,7 @@ function QuotationPopup({ row, onClose }) {
           </button>
         </div>
         <div className="overflow-y-auto px-6 py-5">
-          <QuotationSummary quotation={row} title="Quotation Received from Lead Management" />
+          <QuotationSummary quotation={row} title={title} />
         </div>
       </div>
     </div>,

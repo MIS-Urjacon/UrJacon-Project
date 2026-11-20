@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getLead, saveLead } from "@/lib/leads";
 import { getSession, requireLeadWriter } from "@/lib/session";
+import { canSee, assigneeIds, NO_ASSIGNMENT } from "@/lib/assign";
+import { canSeeRecord } from "@/lib/defaultAssignees";
 import { withQuotationSnapshot } from "@/lib/quotation";
 
 // This is the single integration point for quotation delivery. Today it records
@@ -11,7 +13,7 @@ export async function POST(_request, { params }) {
   if (guard.error) return guard.error;
   const { id } = await params;
   const lead = await getLead(id);
-  if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  if (!lead || !(await canSeeRecord(guard.user, lead))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   if (lead.status !== "open" || lead.leadStage !== "quotation") {
     return NextResponse.json({ error: "This lead is not pending at Quotation" }, { status: 409 });
   }
@@ -34,6 +36,7 @@ export async function POST(_request, { params }) {
     ...lead,
     // The quotation page only creates the quotation; the customer's answer is taken in Call Tracker.
     leadStage: "contacted",
+    ...(assigneeIds(lead).length ? NO_ASSIGNMENT : {}),
     quotationStatus: "sent",
     quotationSentAt: now,
     quotationSentBy: by,

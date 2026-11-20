@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { UploadCloud, X, FileText, Loader2 } from "lucide-react";
 
 // Uploads to /api/upload and keeps a list of { url, name }.
-export default function FileUpload({ files = [], onChange, max = 1, readOnly = false }) {
+export default function FileUpload({ files = [], onChange, max = 1, readOnly = false, compact = false }) {
   const ref = useRef(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -32,6 +32,48 @@ export default function FileUpload({ files = [], onChange, max = 1, readOnly = f
 
   if (readOnly && files.length === 0) {
     return <div className="text-sm text-slate-400">No file uploaded</div>;
+  }
+
+  // One-line version for table-style forms: a small file chip, or an Upload button.
+  if (compact) {
+    return (
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          {files.map((f, i) => (
+            <span key={f.url} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-white py-1 pl-1 pr-2">
+              <a href={f.url} target="_blank" rel="noreferrer" title={f.name} className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-slate-50">
+                {f.url.endsWith(".pdf") ? (
+                  <FileText size={16} className="text-slate-400" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={f.url} alt={f.name} className="h-full w-full object-cover" />
+                )}
+              </a>
+              <a href={f.url} target="_blank" rel="noreferrer" className="truncate text-xs font-medium text-slate-600 hover:text-brand-dark">{f.name || "View file"}</a>
+              {!readOnly && (
+                <button type="button" aria-label="Remove file" onClick={() => onChange(files.filter((_, j) => j !== i))} className="shrink-0 text-slate-400 hover:text-rose-600">
+                  <X size={14} />
+                </button>
+              )}
+            </span>
+          ))}
+          {!readOnly && files.length < max && (
+            <button
+              type="button"
+              onClick={() => ref.current?.click()}
+              disabled={busy}
+              title="JPG, PNG, WEBP, GIF or PDF, max 5 MB"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-3 text-sm text-slate-500 transition hover:border-brand hover:bg-brand-50 hover:text-brand-dark disabled:opacity-60"
+            >
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+              {busy ? "Uploading..." : "Upload"}
+            </button>
+          )}
+        </div>
+        <input ref={ref} type="file" hidden multiple={max > 1} accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" onChange={pick} />
+        {err && <div className="mt-1 text-xs font-medium text-rose-600">{err}</div>}
+      </div>
+    );
   }
 
   return (

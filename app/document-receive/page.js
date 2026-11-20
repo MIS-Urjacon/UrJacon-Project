@@ -38,7 +38,7 @@ export default function DocumentReceivePage() {
       historyColumns={OUT.documentReceive}
       Form={DocumentReceiveForm}
       modalTitle="Document Receive"
-      modalWidth="max-w-3xl"
+      modalWidth="max-w-5xl"
     />
   );
 }

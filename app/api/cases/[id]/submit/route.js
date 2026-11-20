@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCase, saveCase } from "@/lib/store";
-import { ALL_STEPS, TAT_DAYS, nextStage, newSchedule } from "@/lib/workflow";
+import { ALL_STEPS, STAGE_LABEL, TAT_DAYS, nextStage, newSchedule, surveyOpen } from "@/lib/workflow";
 import { evaluate } from "@/lib/validate";
 import { getSession } from "@/lib/session";
 import { canSubmitStep } from "@/lib/access";
+import { canSee, assigneeIds, NO_ASSIGNMENT } from "@/lib/assign";
+import { canSeeRecord } from "@/lib/defaultAssignees";
 
 // Submit one pipeline step for a case. On success the case moves to the next
 // stage and the step's data is kept as that step's history.
@@ -19,8 +21,10 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: "Your role cannot update this step" }, { status: 403 });
   }
   const row = await getCase(id);
-  if (!row) return NextResponse.json({ error: "Case not found" }, { status: 404 });
-  if (row.stage !== step) {
+  if (!row || !(await canSeeRecord(me, row))) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  // Site Survey is filled in parallel with Payment Work Start, so the case is not "at" it.
+  const parallelSurvey = step === "siteSurvey" && row.stage !== "siteSurvey" && surveyOpen(row);
+  if (row.stage !== step && !parallelSurvey) {
     return NextResponse.json({ error: "This case is not at this step" }, { status: 409 });
   }
   const result = evaluate(step, data, row);
@@ -36,7 +40,9 @@ export async function POST(request, { params }) {
       submittedBy: (await getSession())?.name ?? "Unknown",
     },
   };
-  if (!result.hold) {
+  if (!result.hold && parallelSurvey) {
+    row.schedule = { ...row.schedule, siteSurvey: { ...(row.schedule?.siteSurvey ?? newSchedule("siteSurvey", now)), actualDate: now } };
+  } else if (!result.hold) {
     // Actual Date for this step; Timestamp + Planned Date for the next one.
     let next = nextStage(step, row);
     // Document Verification finished for a reported issue: resolve it and go back to the step it came from.
@@ -48,7 +54,33 @@ export async function POST(request, { params }) {
     }
     row.schedule = { ...row.schedule, [step]: { ...row.schedule?.[step], actualDate: now } };
     row.stage = next;
+    if (assigneeIds(row).length) Object.assign(row, NO_ASSIGNMENT); // next step: back to automatic
     if (next in TAT_DAYS) row.schedule[next] = newSchedule(next, now);
+    // Login done also opens Site Survey (parallel to Payment Work Start).
+    if (step === "login" && row.steps.siteSurvey?.status !== "done") {
+      row.schedule.siteSurvey = row.schedule.siteSurvey?.timestamp ? row.schedule.siteSurvey : newSchedule("siteSurvey", now);
+    }
+  }
+  // Login Hold: the case goes back to Document Receive (like a reported issue) and returns to Login PMSG
+  // once the documents are verified again. Its explicit assignment is cleared, so Document Receive's
+  // default assignee gets it.
+  if (step === "login" && result.hold) {
+    const saved = row.steps.login;
+    const issue = {
+      open: true,
+      fromStep: "login",
+      fromLabel: STAGE_LABEL.login,
+      type: "Login / PMSG problem",
+      description: [`${saved.holdCode} · ${saved.holdReason}`, saved.remark, saved.retryDate ? `Retry on ${saved.retryDate}` : ""].filter(Boolean).join(" — "),
+      files: [],
+      reportedAt: now,
+      reportedBy: saved.submittedBy,
+    };
+    row.issue = issue;
+    row.issues = [...(row.issues ?? []), issue];
+    row.stage = "documentReceive";
+    if (assigneeIds(row).length) Object.assign(row, NO_ASSIGNMENT);
+    row.schedule = { ...row.schedule, documentReceive: newSchedule("documentReceive", now) };
   }
   await saveCase(row);
   return NextResponse.json(row);

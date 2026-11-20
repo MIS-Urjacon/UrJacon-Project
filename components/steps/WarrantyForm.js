@@ -4,6 +4,8 @@ import { useState } from "react";
 import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
+import CaseDetails from "@/components/steps/CaseDetails";
+import { importantDetails } from "@/lib/caseDetails";
 
 export default function WarrantyForm({ row, readOnly, onSubmit, onCancel }) {
   const previous = row.steps?.warranty;
@@ -40,6 +42,7 @@ export default function WarrantyForm({ row, readOnly, onSubmit, onCancel }) {
   return (
     <form onSubmit={submit} className="space-y-6">
       <CaseSummary row={row} />
+      <CaseDetails items={importantDetails(row, "warranty")} />
 
       <fieldset disabled={readOnly || clearance?.status === "done"}>
         <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">

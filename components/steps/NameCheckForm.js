@@ -94,6 +94,27 @@ export default function NameCheckForm({ row, readOnly, onSubmit, onCancel }) {
         </div>
       </fieldset>
 
+      {src?.terracePhotoFiles?.length > 0 && (
+        <section>
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Terrace geotag photo</div>
+          <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 p-3">
+            {src.terracePhotoFiles.map((file) => (
+              <a key={file.url} href={file.url} target="_blank" rel="noreferrer" title={file.name} className="group block w-40">
+                <div className="flex h-28 w-40 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  {file.url.endsWith(".pdf") ? (
+                    <Paperclip size={26} className="text-slate-400" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={file.url} alt={file.name || "Terrace geotag photo"} className="h-full w-full object-cover transition group-hover:scale-105" />
+                  )}
+                </div>
+                <div className="mt-1 truncate text-xs font-medium text-brand-dark group-hover:underline">{file.name || "View photo"}</div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
       <fieldset disabled={readOnly}>
         <label className="block">
           <Label required={!all}>Remark</Label>

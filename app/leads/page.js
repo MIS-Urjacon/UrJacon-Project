@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, ClipboardCheck, Inbox, Plus, Search } from "lucide-react";
 import LeadForm from "@/components/leads/LeadForm";
 import Modal from "@/components/Modal";
+import { BulkAssign, RowBox, SelectAllBox, useCanAssign, useSelection } from "@/components/BulkAssign";
+import AssigneeCell from "@/components/AssigneeCell";
 import { Avatar, Button, DateCell, Pill, Toast } from "@/components/ui";
-import { LEAD_STAGE_LABEL } from "@/lib/leadConstants";
+import { leadStageLabel } from "@/lib/leadConstants";
 
 const TABS = [["open", "Open"], ["converted", "Converted"], ["lost", "Lost"]];
-const TEMPERATURE_COLOR = { Hot: "red", Warm: "amber", Cold: "blue" };
+const TEMPERATURE_COLOR = { Hot: "red", Warm: "amber", Cold: "blue", Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
 const PAGE_SIZE = 10;
 
 export default function LeadsPage() {
@@ -61,6 +63,8 @@ export default function LeadsPage() {
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const canBulk = useCanAssign();
+  const sel = useSelection(tab === "open" ? shown : []);
 
   function notify(message) {
     setToast(message);
@@ -128,26 +132,28 @@ export default function LeadsPage() {
             <Search size={16} />
             <input className="w-full bg-transparent text-sm text-slate-700 outline-none" placeholder="Search name, mobile, village, lead ID..." value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
           </div>
-          <div className="text-sm text-slate-400">{filtered.length} {filtered.length === 1 ? "lead" : "leads"}</div>
+          <div className="flex items-center gap-4"><div className="text-sm text-slate-400">{filtered.length} {filtered.length === 1 ? "lead" : "leads"}</div>{canBulk && <BulkAssign type="lead" sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}</div>
         </div>
 
         <div className="overflow-x-auto border-t border-slate-100">
           <table className="w-full min-w-[1100px] text-left text-[13px]">
             <thead><tr className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              <th className="px-3 py-3 text-center">Action</th><th className="px-3 py-3">Created</th><th className="px-3 py-3">Lead</th><th className="px-3 py-3">Source</th><th className="px-3 py-3">Requirement</th><th className="px-3 py-3">Next Follow-up</th><th className="px-3 py-3">Priority</th><th className="px-3 py-3">Stage / Status</th>
+              <th className="px-3 py-3 text-center"><div className="flex items-center justify-center gap-2.5">{canBulk && tab === "open" && <SelectAllBox sel={sel} />}Action</div></th><th className="px-3 py-3">Created</th><th className="px-3 py-3">Lead</th><th className="px-3 py-3">Source</th><th className="px-3 py-3">Requirement</th><th className="px-3 py-3">Brand</th><th className="px-3 py-3">Assigned To</th><th className="px-3 py-3">Next Follow-up</th><th className="px-3 py-3">Priority</th><th className="px-3 py-3">Stage / Status</th>
             </tr></thead>
             <tbody>
-              {loading && Array.from({ length: 4 }).map((_, index) => <tr key={index}><td colSpan="8" className="border-t border-slate-100 px-4 py-4"><div className="skeleton h-5 w-full" /></td></tr>)}
+              {loading && Array.from({ length: 4 }).map((_, index) => <tr key={index}><td colSpan="10" className="border-t border-slate-100 px-4 py-4"><div className="skeleton h-5 w-full" /></td></tr>)}
               {!loading && shown.map((lead) => (
                 <tr key={lead.id} className="hover:bg-slate-50/70">
-                  <td className="border-t border-slate-100 px-3 py-3 text-center"><button onClick={() => setModal(lead)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-xs font-semibold text-white hover:bg-brand-dark"><ClipboardCheck size={13} />{lead.status === "converted" ? "View" : "Update"}</button></td>
+                  <td className="border-t border-slate-100 px-3 py-3 text-center"><div className="flex items-center justify-center gap-2.5">{canBulk && lead.status === "open" && <RowBox sel={sel} row={lead} />}<button onClick={() => setModal(lead)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-xs font-semibold text-white hover:bg-brand-dark"><ClipboardCheck size={13} />{lead.status === "converted" ? "View" : "Update"}</button></div></td>
                   <td className="border-t border-slate-100 px-3 py-3"><DateCell value={lead.timestamp} /></td>
                   <td className="border-t border-slate-100 px-3 py-3"><div className="flex items-center gap-3"><Avatar name={lead.customerName} /><div><div className="font-semibold text-slate-800">{lead.customerName}</div><div className="text-xs text-slate-400">{lead.id} · {lead.mobile}</div></div></div></td>
                   <td className="border-t border-slate-100 px-3 py-3 text-slate-600"><div>{lead.source}</div><div className="text-xs text-slate-400">{lead.agent || "-"}</div></td>
                   <td className="border-t border-slate-100 px-3 py-3 text-slate-600"><div>{lead.kwWanted ? `${lead.kwWanted} kW` : "-"} · {lead.paymentMode || "Undecided"}</div><div className="text-xs text-slate-400">{lead.productCode || lead.village || "-"}</div></td>
+                  <td className="border-t border-slate-100 px-3 py-3 text-slate-600">{lead.brand || "-"}</td>
+                  <td className="border-t border-slate-100 px-3 py-3"><AssigneeCell row={lead} /></td>
                   <td className="border-t border-slate-100 px-3 py-3"><DateCell value={lead.nextFollowUp} /></td>
                   <td className="border-t border-slate-100 px-3 py-3"><Pill color={TEMPERATURE_COLOR[lead.temperature]}>{lead.temperature}</Pill></td>
-                  <td className="border-t border-slate-100 px-3 py-3">{lead.status === "converted" ? <><Pill color="green">Converted</Pill><div className="mt-1 text-xs text-slate-400">{lead.convertedCaseId}</div></> : lead.status === "lost" ? <><Pill color="red">Lost</Pill><div className="mt-1 max-w-44 truncate text-xs text-slate-400">{lead.lostReason}</div></> : <Pill color="blue">{LEAD_STAGE_LABEL[lead.leadStage] ?? "Open"}</Pill>}</td>
+                  <td className="border-t border-slate-100 px-3 py-3">{lead.status === "converted" ? <><Pill color="green">Converted</Pill><div className="mt-1 text-xs text-slate-400">{lead.convertedCaseId}</div></> : lead.status === "lost" ? <><Pill color="red">Lost</Pill><div className="mt-1 max-w-44 truncate text-xs text-slate-400">{lead.lostReason}</div></> : <Pill color="blue">{leadStageLabel(lead) ?? "Open"}</Pill>}</td>
                 </tr>
               ))}
             </tbody>

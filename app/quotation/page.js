@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { FileText } from "lucide-react";
 import LeadPipelinePage from "@/components/leads/LeadPipelinePage";
 import QuotationForm from "@/components/leads/QuotationForm";
+import QuotationWorkspace from "@/components/leads/QuotationWorkspace";
 import { DateCell, Pill } from "@/components/ui";
 
 const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -31,8 +32,11 @@ function QuotationFile({ file }) {
 }
 
 export default function QuotationPage() {
-  // Pending = quotation still to be created / sent (including a started revision).
-  const filter = useCallback((row) => row.leadStage === "quotation" && row.quotationStatus !== "sent", []);
+  // Pending = leads a quotation can be made for: open, with a BP SC Number, no sent quotation yet (a
+  // draft or a started revision stays here too).
+  const filter = useCallback((row) => row.quotationStatus !== "sent" && (row.leadStage === "quotation" || (["new", "contacted"].includes(row.leadStage) && Boolean(row.bpScNumber))), []);
   const historyFilter = useCallback((row) => Boolean(row.quotationStatus && row.quotationCreatedAt), []);
-  return <LeadPipelinePage title="Quotation & Documents" subtitle="Step 3 · Create and send the quotation, or revise a sent one from History. After sending, the lead returns to Call Tracker for the customer's answer." filter={filter} historyFilter={historyFilter} historyColumns={HISTORY_COLUMNS} Form={QuotationForm} modalTitle="Create, send and track quotation" />;
+  // An open lead whose quotation is sent can be revised (History > Revise opens it in Pending).
+  const canRevise = useCallback((row) => row.status === "open" && row.quotationStatus === "sent" && ["quotation", "contacted"].includes(row.leadStage), []);
+  return <LeadPipelinePage title="Quotation & Documents" subtitle="Step 3 · Choose a BP SC Number to fill the quotation with that lead's details, then save and send it. To correct a sent one, use Revise in History. After sending, the lead is in Call Tracker for the customer's answer." filter={filter} historyFilter={historyFilter} historyColumns={HISTORY_COLUMNS} Form={QuotationForm} PendingView={QuotationWorkspace} canRevise={canRevise} modalTitle="Create, send and track quotation" />;
 }

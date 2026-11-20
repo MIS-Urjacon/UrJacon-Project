@@ -11,6 +11,8 @@ import {
 import Modal from "@/components/Modal";
 import { Pill, Toast, DateCell } from "@/components/ui";
 import IssueReportForm from "@/components/steps/IssueReportForm";
+import { BulkAssign, RowBox, SelectAllBox, useCanAssign, useSelection } from "@/components/BulkAssign";
+import AssigneeCell from "@/components/AssigneeCell";
 import { STAGE_LABEL } from "@/lib/workflow";
 
 const PAGE_SIZE = 10;
@@ -32,6 +34,7 @@ export default function StepPage({
   modalTitle,
   modalWidth,
   modalBodyClass,
+  isPending, // optional: which cases are pending here (default: the case is at this stage)
 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +43,7 @@ export default function StepPage({
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(null); // { row, readOnly }
   const [toast, setToast] = useState("");
-  const [issueRow, setIssueRow] = useState(null); // case whose issue is being reported
+  const [issueRows, setIssueRows] = useState(null); // cases whose issue is being reported (ticked rows)
 
   async function load() {
     setRows(await (await fetch("/api/cases", { cache: "no-store" })).json());
@@ -64,8 +67,8 @@ export default function StepPage({
 
   const entry = (r) => r.steps?.[stepKey];
   const pending = useMemo(
-    () => rows.filter((r) => r.stage === stepKey).sort((a, b) => (b.schedule?.[stepKey]?.timestamp || b.timestamp).localeCompare(a.schedule?.[stepKey]?.timestamp || a.timestamp)),
-    [rows, stepKey]
+    () => rows.filter((r) => (isPending ? isPending(r) : r.stage === stepKey)).sort((a, b) => (b.schedule?.[stepKey]?.timestamp || b.timestamp).localeCompare(a.schedule?.[stepKey]?.timestamp || a.timestamp)),
+    [rows, stepKey, isPending]
   );
   const history = useMemo(
     () =>
@@ -84,6 +87,11 @@ export default function StepPage({
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const cur = Math.min(page, pages);
   const shown = list.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
+  const canBulk = useCanAssign();
+  // Report Issue exists on every step after Document Verification; ticking rows offers it (and Assign).
+  const hasReport = stepKey !== "nameCheck" && stepKey !== "documentReceive";
+  const showBoxes = canBulk || hasReport;
+  const sel = useSelection(tab === "pending" ? shown : []);
 
   function notify(msg) {
     setToast(msg);
@@ -102,6 +110,8 @@ export default function StepPage({
     notify(
       j.stage === stepKey
         ? "Saved on hold. The case stays in Pending."
+        : stepKey === "siteSurvey" && j.steps?.siteSurvey?.status === "done" && j.stage !== "siteSurvey" && j.stage !== "done"
+        ? `Survey completed. The case continues at ${STAGE_LABEL[j.stage]}.`
         : `Submitted. Moved to ${STAGE_LABEL[j.stage]}.`
     );
     load();
@@ -110,15 +120,24 @@ export default function StepPage({
 
   // Report an issue: the case goes back to Document Verification & Name Check.
   async function reportIssue(data) {
-    const res = await fetch(`/api/cases/${issueRow.id}/issue`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const j = await res.json();
-    if (!res.ok) return j.error;
-    setIssueRow(null);
-    notify(`Issue reported. Case moved to ${STAGE_LABEL.documentReceive}.`);
+    let ok = 0;
+    let firstError = "";
+    for (const row of issueRows) {
+      const res = await fetch(`/api/cases/${row.id}/issue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) ok++;
+      else firstError ||= (await res.json()).error;
+    }
+    if (ok === 0) return firstError || "Could not report the issue";
+    const failed = issueRows.length - ok;
+    setIssueRows(null);
+    sel.clear();
+    notify(
+      `Issue reported for ${ok} case${ok > 1 ? "s" : ""}. Moved to ${STAGE_LABEL.documentReceive}.${failed ? ` ${failed} failed: ${firstError}` : ""}`
+    );
     load();
     return null;
   }
@@ -177,8 +196,21 @@ export default function StepPage({
               className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             />
           </div>
-          <div className="text-sm text-slate-400">
-            {list.length} {list.length === 1 ? "case" : "cases"}
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-slate-400">
+              {list.length} {list.length === 1 ? "case" : "cases"}
+            </div>
+            {hasReport && sel.selected.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIssueRows(sel.selected)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+              >
+                <AlertTriangle size={15} />
+                Report Issue{sel.selected.length > 1 ? ` (${sel.selected.length})` : ""}
+              </button>
+            )}
+            {canBulk && <BulkAssign type="case" sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}
           </div>
         </div>
 
@@ -188,7 +220,10 @@ export default function StepPage({
               <tr className="bg-slate-50 text-slate-500">
                 {tab === "pending" && (
                   <th className={`${th} sticky left-0 z-10 bg-slate-50 text-center shadow-[8px_0_8px_-8px_rgba(15,23,42,0.12)]`}>
-                    Action
+                    <div className="flex items-center justify-center gap-2.5">
+                      {showBoxes && <SelectAllBox sel={sel} />}
+                      Action
+                    </div>
                   </th>
                 )}
                 <th className={th}>Timestamp</th>
@@ -203,6 +238,7 @@ export default function StepPage({
                       {c.label}
                     </th>
                   ))}
+                <th className={th}>Assigned To</th>
                 <th className={th}>Planned Date</th>
                 {tab === "history" && <th className={th}>Actual Date</th>}
                 <th className={th}>Status</th>
@@ -212,7 +248,7 @@ export default function StepPage({
               {loading &&
                 Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i}>
-                    <td colSpan={columns.length + 4 + (tab === "history" ? historyColumns.length : 0)} className="border-t border-slate-100 px-4 py-4">
+                    <td colSpan={columns.length + 5 + (tab === "history" ? historyColumns.length : 0)} className="border-t border-slate-100 px-4 py-4">
                       <div className="skeleton h-5 w-full" />
                     </td>
                   </tr>
@@ -225,21 +261,14 @@ export default function StepPage({
                     <tr key={r.id} className="group transition hover:bg-slate-50/70">
                       {tab === "pending" && (
                         <td className="sticky left-0 z-10 border-t border-slate-100 bg-white px-2.5 py-3.5 text-center shadow-[8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex items-center justify-center gap-2.5">
+                            {showBoxes && <RowBox sel={sel} row={r} />}
                             <button
                               onClick={() => setModal({ row: r, readOnly: false })}
                               className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-dark"
                             >
                               <ClipboardCheck size={13} /> Update
                             </button>
-                            {stepKey !== "nameCheck" && stepKey !== "documentReceive" && (
-                              <button
-                                onClick={() => setIssueRow(r)}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-                              >
-                                <AlertTriangle size={13} /> Report Issue
-                              </button>
-                            )}
                           </div>
                         </td>
                       )}
@@ -257,6 +286,9 @@ export default function StepPage({
                             {c.cell(r)}
                           </td>
                         ))}
+                      <td className={td}>
+                        <AssigneeCell row={stepKey === "siteSurvey" && tab === "pending" && r.stage !== "siteSurvey" && r.surveyAssigneesLabel != null ? { ...r, assigneesLabel: r.surveyAssigneesLabel, assigneesAuto: true, assigneesDefault: r.surveyAssigneesDefault } : r} />
+                      </td>
                       <td className={td}>
                         <DateCell value={sch?.plannedDate} />
                       </td>
@@ -346,19 +378,20 @@ export default function StepPage({
       </Modal>
 
       <Modal
-        open={!!issueRow}
-        onClose={() => setIssueRow(null)}
+        open={!!issueRows}
+        onClose={() => setIssueRows(null)}
         title="Report Issue"
-        subtitle={issueRow ? `${issueRow.customerName} · ${issueRow.bpScNumber}` : ""}
+        subtitle={issueRows ? (issueRows.length > 1 ? `${issueRows.length} cases selected` : `${issueRows[0].customerName} · ${issueRows[0].bpScNumber}`) : ""}
         maxWidth="max-w-2xl"
       >
-        {issueRow && (
+        {issueRows && (
           <IssueReportForm
-            key={issueRow.id}
-            row={issueRow}
+            key={issueRows.map((r) => r.id).join(",")}
+            row={issueRows[0]}
+            count={issueRows.length}
             stepKey={stepKey}
             onSubmit={reportIssue}
-            onCancel={() => setIssueRow(null)}
+            onCancel={() => setIssueRows(null)}
           />
         )}
       </Modal>
