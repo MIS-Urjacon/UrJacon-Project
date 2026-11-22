@@ -6,6 +6,7 @@ import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
 import CaseDetails from "@/components/steps/CaseDetails";
 import { importantDetails } from "@/lib/caseDetails";
+import { docData } from "@/lib/workflow";
 
 export default function WarrantyForm({ row, readOnly, onSubmit, onCancel }) {
   const previous = row.steps?.warranty;
