@@ -3,6 +3,7 @@ import { useState } from "react";
 import DropSelect from "@/components/Select";
 import { HOLD_REASONS } from "@/lib/processConfig";
 import { CaseSummary } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 import CaseDetails from "@/components/steps/CaseDetails";
 import { importantDetails } from "@/lib/caseDetails";
@@ -25,6 +26,16 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
     if (loginCheck === "Login Hold" && !holdCode) return setErr("Select the hold reason");
     setSaving(true);
     const msg = await onSubmit({ loginCheck, applicationNo, holdCode, retryDate, remark });
+    setSaving(false);
+    if (msg) setErr(msg);
+  }
+
+  // Name Correction / Owner Change: the case goes to that page and then to the Agreement.
+  async function correct(route) {
+    setErr("");
+    if (!remark.trim()) return setErr(`Write the remark: what needs the ${route === "ownerChange" ? "owner change" : "name correction"}`);
+    setSaving(true);
+    const msg = await onSubmit({ route, applicationNo, remark });
     setSaving(false);
     if (msg) setErr(msg);
   }
@@ -79,13 +90,17 @@ export default function LoginForm({ row, readOnly, onSubmit, onCancel }) {
           onChange={(e) => setRemark(e.target.value)}
         />
       </label>
-      <FormActions
-        readOnly={readOnly}
-        onCancel={onCancel}
-        saving={saving}
-        error={err}
-        submitLabel={loginCheck === "Login Hold" ? "Send back to Document Receive" : "Submit & send to Payment Work Start"}
-      />
+      {readOnly ? (
+        <FormActions readOnly onCancel={onCancel} />
+      ) : (
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+          {err && <span className="mr-auto text-sm font-medium text-rose-600">{err}</span>}
+          <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
+          <Button variant="outline" type="button" disabled={saving} onClick={() => correct("nameCorrection")}>Name Correction</Button>
+          <Button variant="outline" type="button" disabled={saving} onClick={() => correct("ownerChange")}>Owner Change</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Submitting..." : loginCheck === "Login Hold" ? "Send back to Document Receive" : "Submit"}</Button>
+        </div>
+      )}
     </form>
   );
 }

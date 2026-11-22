@@ -14,8 +14,8 @@ export async function POST(_request, { params }) {
   const { id } = await params;
   const lead = await getLead(id);
   if (!lead || !(await canSeeRecord(guard.user, lead))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-  if (lead.status !== "open" || lead.leadStage !== "quotation") {
-    return NextResponse.json({ error: "This lead is not pending at Quotation" }, { status: 409 });
+  if (lead.status !== "open") {
+    return NextResponse.json({ error: "Only an open lead can be sent a quotation" }, { status: 409 });
   }
   if (!lead.quotationReference) {
     return NextResponse.json({ error: "Create the quotation before sending it" }, { status: 400 });
@@ -34,22 +34,14 @@ export async function POST(_request, { params }) {
   const by = user?.name ?? "Unknown";
   const updated = {
     ...lead,
-    // The quotation page only creates the quotation; the customer's answer is taken in Call Tracker.
-    leadStage: "contacted",
-    ...(assigneeIds(lead).length ? NO_ASSIGNMENT : {}),
+    // The quotation is standalone: sending it does not move the lead or touch Call Tracker.
     quotationStatus: "sent",
     quotationSentAt: now,
     quotationSentBy: by,
     quotationChannel: "Manual (WhatsApp integration pending)",
     quotationRevisions: withQuotationSnapshot(lead, { status: "sent", sentAt: now, sentBy: by }),
-    outcome: "Quotation sent",
-    nextFollowUp: "",
     updatedAt: now,
     updatedBy: by,
-    followUps: [
-      ...(lead.followUps ?? []),
-      { at: now, type: "Quotation", outcome: "Quotation sent", nextFollowUp: "", remark: "WhatsApp integration pending", by },
-    ],
   };
   await saveLead(updated);
   return NextResponse.json({

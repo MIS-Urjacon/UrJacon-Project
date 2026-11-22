@@ -11,7 +11,7 @@ export async function POST(request, { params }) {
   const { id } = await params;
   const lead = await getLead(id);
   if (!lead || !(await canSeeRecord(guard.user, lead))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-  if (lead.status !== "open" || !["quotation", "contacted"].includes(lead.leadStage)) {
+  if (lead.status !== "open") {
     return NextResponse.json({ error: "Only an open lead with a sent quotation can be revised" }, { status: 409 });
   }
   if (lead.quotationStatus !== "sent") {
@@ -30,8 +30,6 @@ export async function POST(request, { params }) {
   const archived = withQuotationSnapshot(lead, { status: "sent" });
   const updated = {
     ...lead,
-    leadStage: "quotation",
-    ...(assigneeIds(lead).length ? NO_ASSIGNMENT : {}),
     quotationRevision: quotationVersion(lead) + 1,
     quotationRevisionReason: revisionReason,
     quotationRevisions: archived,
@@ -40,7 +38,6 @@ export async function POST(request, { params }) {
     quotationSentAt: "",
     quotationSentBy: "",
     quotationChannel: "",
-    outcome: "Quotation revision started",
     updatedAt: now,
     updatedBy: by,
   };

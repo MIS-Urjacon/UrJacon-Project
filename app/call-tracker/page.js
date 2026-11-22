@@ -2,7 +2,7 @@
 import { useCallback } from "react";
 import LeadPipelinePage from "@/components/leads/LeadPipelinePage";
 import CallTrackerForm from "@/components/leads/CallTrackerForm";
-import { quotationStageLabel, visitHistory } from "@/lib/leadConstants";
+import { visitHistory } from "@/lib/leadConstants";
 
 const two = (top, bottom) => <div className="leading-tight"><div className="text-slate-700">{top || "-"}</div><div className="text-xs text-slate-400">{bottom || "-"}</div></div>;
 const EXTRA_COLUMNS = [
@@ -34,8 +34,11 @@ function VisitCell({ lead }) {
   );
 }
 
+// Call Tracker does not show quotation state: quotations are a separate page.
+const callStageLabel = (lead) => (lead.leadStage === "documentsReady" ? "Documents ready" : lead.leadStage === "new" ? "New lead" : "Contacted");
+
 export default function CallTrackerPage() {
-  // A lead with a sent quotation (or a ready packet) is back here for the customer's answer.
-  const filter = useCallback((row) => ["new", "contacted", "documentsReady"].includes(row.leadStage) || (row.leadStage === "quotation" && row.quotationStatus === "sent"), []);
-  return <LeadPipelinePage title="Call Tracker" subtitle="Step 2 · Call or visit each lead. Quotations are made on the Quotation page by BP SC Number; once a quotation is sent the lead is here, where you record the customer's answer and confirm Document Given to go to Document Verification." filter={filter} extraColumns={EXTRA_COLUMNS} Form={CallTrackerForm} stageLabel={quotationStageLabel} modalTitle="Record call outcome" />;
+  // Every open lead waits here until the customer gives documents (then it goes to Document Receive).
+  const filter = useCallback((row) => ["new", "contacted", "quotation", "documentsReady"].includes(row.leadStage), []);
+  return <LeadPipelinePage title="Call Tracker" subtitle="Step 2 · Call or visit each lead and record the customer's response. When the customer gives the documents, choose Document given and the lead goes to Document Receive." filter={filter} extraColumns={EXTRA_COLUMNS} Form={CallTrackerForm} stageLabel={callStageLabel} modalTitle="Record call outcome" />;
 }

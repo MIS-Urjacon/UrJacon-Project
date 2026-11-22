@@ -16,6 +16,7 @@ The signed-in home page is `/dashboard`, an operational command center built
 from the same lead and case records. It is read-only and does not duplicate data.
 
 Decisions already made by the owner:
+
 - **Bitrix stage is removed.** It does not exist in this system.
 - Replies to the owner are in Hinglish (Hindi in English letters).
 - **Do not change existing output when adding something new.** Only touch what
@@ -29,6 +30,7 @@ Decisions already made by the owner:
   (dev). See section 8.
 
 Next.js 16 differences that already caused errors here:
+
 - Do **not** `export const dynamic = ...` in route files (`cacheComponents` is on).
 - Route `params` is a Promise: `const { id } = await params`.
 - Do not call `new Date()` during render in a prerendered component. Set it in
@@ -55,7 +57,7 @@ not hard-code the next step. The current sequence is:
      Approval -> Accounts Cash Receipt -> Cash Dispatch.
    - **Subsidy Cheque (Odisha only):** Subsidy Cheque Documents -> Accounts
      Cash Receipt -> Cash Dispatch.
-4. **Installation and inspection:** Assign Installer -> Installation Evidence
+4. **Installation and inspection:** Assign Installer -> Installation Pending
    -> Bill & DCR -> Portal Installation Submission -> Inspection File -> Meter
    Installation -> JE Inspection -> Generation & Wi-Fi -> Portal Inspection
    Approval -> Tariff Check.
@@ -69,6 +71,58 @@ data is carried forward to Dispatch. The payment, dispatch, installation,
 inspection and closure gates follow the design reference business rules. The
 complete rule/hold/role/document glossary is visible in the app at
 `/process-reference`; live operational summaries are at `/reports`.
+
+### Latest flow decisions (override older text below where they differ)
+
+- **Call Tracker is not linked to Quotation.** Responses: Call back later, Visit required, **Document given**
+  (the lead goes straight to Document Receive; no quotation, product code or kW needed), Not interested. No
+  quotation pill / button there.
+- **Quotation is standalone** (`/quotation`): choose a BP SC Number, fill the 11-page proposal (UrjaCon Proposal
+  Studio format: `components/leads/ProposalBuilder.js` + `ProposalFrame.js`, engine in `lib/proposal/engine.js`),
+  Submit sends it. It never changes the lead's stage, outcome or follow-ups. BP SC Number is mandatory for a new lead
+  (first field of Add Lead, checked in `POST /api/leads`).
+- **The case price is set at Document Receive** with plain inputs (`components/steps/DocumentPricing.js`): System
+  Size (kW), System Price incl. GST, Central / State subsidy, Product Code, System Type, Panel, Brand. The server
+  cleans them (`pricingFromInput` in `lib/proposal/lead.js`, called by the `documentReceive` validator) and writes
+  `dealAmount`, subsidy, `kwWanted`, `productCode` on the case in `/api/cases/[id]/submit`. Later steps keep reading
+  those case fields. Quotation prices are not used for cases.
+
+- **Login -> corrections -> Agreement -> Survey / Payment (workflow version 3, all new cases).** The Login PMSG
+  popup has Submit, Name Correction, Owner Change and Cancel. Submit sends the case to the **Agreement** page
+  (`agreementUpload`, now in the main flow for every payment mode). Name Correction / Owner Change (`/name-correction`,
+  `/owner-change`, `nameCorrection` / `ownerChange` in `PROCESS_CONFIG`) need a remark on Login, and after them the case
+  goes to the Agreement. Only after the Agreement is the case on Site Survey and Payment Work Start (`surveyOpen`).
+  Loan cases then start at JanSamarth (no second agreement). Cases made before this keep the old order
+  (`agreementFirst(row)` in `lib/workflow.js`); a case that has not logged in yet is upgraded when Login is submitted.
+
+- **Survey List popup** also asks the owner's survey Google Form questions (`lib/surveyFields.js`, used by
+  `components/steps/SiteSurveyForm.js` and the `siteSurvey` validator): Electrical system (Phase Type, Connection
+  Category, Meter Type), Roof evaluation (type, mounting, structure size, orientation, Cement/Gitti/Balu, condition,
+  age, usable area, shading, access), Cable distances (panel-inverter, inverter-DB, ventilation, earthing, Wi-Fi/LAN),
+  Site logistics (vehicle access, ladder, storage, obstacles, tentative install date) and the Photo checklist with a
+  required survey photo PDF (max 5 MB, the upload limit) and Surveyor Remarks. BP SC number, address, system, panels etc.
+  are not asked again: they are in the "Important details" block.
+
+- **No Status dropdown in Loan, Cash, Installation and Closure popups.** Submitting the popup completes the step
+  (`simpleStep` in `lib/validate.js` always saves `workStatus: Done`; configured steps get `noStatus` in `lib/processConfig.js`).
+  Still there on purpose: Accounts Cash Receipt's **Receipt Status**, the Yes / No answer of 90% Payment Received, the
+  **Balance Status** in Warranty, and the Name Correction / Owner Change pages. **Bank File Ready** now holds Bank, Branch,
+  Bank Quotation and Responsible Person (`EXTRA_FIELDS.bankFileReady`); **File Submission in Bank** only asks for the
+  submitted file (`submissionFiles`). Bank columns read Bank File Ready first, then File Submission for older cases.
+
+- **Loan money and dispatch.** PHS & Loan Decision has only Loan Decision (no home visit date). Bank 70% asks
+  "Bank 70% Amount Received" and Down Payment asks "Down Payment Received"; the Down Payment popup shows the bank 70%
+  already collected and the balance after it. Dispatch (Loan) has no TPWODL / meter-charge fields; Dispatch (Cash / Subsidy
+  Cheque) keeps only the TPWODL Reference for Odisha. The **Material List** with quantities is built by `lib/materials.js`
+  from the system (panels, inverter) and the Survey List answers (structure, DC / AC / earthing cable metres), shown as a
+  table in the Dispatch popups and used as the editable Material List text.
+
+- **Login PMSG > Upload MIS tab** (`components/steps/LoginMisTab.js`, file reading in `lib/misFile.js`, tab hook `extraTab`
+  in `StepPage`): **Export Template** downloads `login-mis-template.csv` (BP SC Number, Login Status, Application No., Login Date,
+  Remark); the user uploads that file as .csv or .xlsx (no library: CSV is parsed in the page, .xlsx with the browser's
+  DecompressionStream; old .xls is not supported). Each BP SC number is matched with the cases and shown as Logged in /
+  Not logged in / Not in the system, with the system's own login status and a Check column, plus the cases pending at Login that
+  the file does not mention. It only reads the file; no case is changed.
 
 ### Lead management (before the case process)
 
@@ -100,7 +154,7 @@ receiving a BP / SC Number or entering operations.
   and signatures. Empty inverter / meter / panel count / included / terms use the defaults. A sent quotation can be revised only after recording a
   reason; the original and every sent R1/R2 version remain in revision history.
   `POST
-  /api/leads/[id]/send-quotation` is the delivery integration point: it records
+/api/leads/[id]/send-quotation` is the delivery integration point: it records
   manual delivery now and will send the WhatsApp message when that integration
   is connected. **The Quotation page is only for making quotations.** Call
   Tracker has no "Send quotation" response. Quotation > Pending has no table: the
@@ -130,12 +184,12 @@ receiving a BP / SC Number or entering operations.
 
 Defined in `lib/workflow.js` (`FLOW`). A case is in exactly one **stage**.
 
-| # | Step key | Page (route) | Popup fields | Moves on when | Next |
-|---|----------|--------------|--------------|---------------|------|
-| 4–6 | `nameCheck` | `/name-check` | Received Aadhaar, PAN, Passbook and Bijli Bill files; name and Proper/Correction Required check on each; Tata/Non-Tata; correction type and reason | All 4 documents are saved, names match and every document is marked Proper; otherwise correction hold | Login PMSG |
-| 7 | `login` | `/login-pmsg` | Login Check in PMSG (Login Done / Login Hold), hold reason (H02 / H03, full text), retry date, remark (no image upload) | Login Done. **Login Hold sends the case back to Document Receive** (an issue is opened with the hold reason; Document Receive's default assignee gets it) and, once re-verified, it returns to Login PMSG | Site Survey |
-| 8 | `siteSurvey` (page name **Survey List**) | `/site-survey` | Customer Name, Contact Number, Village (address), Survey Date, Surveyor Name (dropdown of employees, `GET /api/staff`), Smart Meter, Material Needed; the popup also shows the important case details (address, route, system, panels, inverter, payment mode, application no., map link) | Valid submit | Payment Work Start |
-| After 8 | `paymentWorkStart` | `/payment-work-start` | Cash or Loan, Status (Done / Not Done), Corridor (Regular / Special) | Status = Done | **Loan** goes to Bank File Ready. **Cash** goes to Ask 90% Payment for Dispatch |
+| #       | Step key                                 | Page (route)          | Popup fields                                                                                                                                                                                                                                                                              | Moves on when                                                                                                                                                                                             | Next                                                                            |
+| ------- | ---------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 4–6     | `nameCheck`                              | `/name-check`         | Received Aadhaar, PAN, Passbook and Bijli Bill files; name and Proper/Correction Required check on each; Tata/Non-Tata; correction type and reason                                                                                                                                        | All 4 documents are saved, names match and every document is marked Proper; otherwise correction hold                                                                                                     | Login PMSG                                                                      |
+| 7       | `login`                                  | `/login-pmsg`         | Login Check in PMSG (Login Done / Login Hold), hold reason (H02 / H03, full text), retry date, remark (no image upload)                                                                                                                                                                   | Login Done. **Login Hold sends the case back to Document Receive** (an issue is opened with the hold reason; Document Receive's default assignee gets it) and, once re-verified, it returns to Login PMSG | Site Survey                                                                     |
+| 8       | `siteSurvey` (page name **Survey List**) | `/site-survey`        | Customer Name, Contact Number, Village (address), Survey Date, Surveyor Name (dropdown of employees, `GET /api/staff`), Smart Meter, Material Needed; the popup also shows the important case details (address, route, system, panels, inverter, payment mode, application no., map link) | Valid submit                                                                                                                                                                                              | Payment Work Start                                                              |
+| After 8 | `paymentWorkStart`                       | `/payment-work-start` | Cash or Loan, Status (Done / Not Done), Corridor (Regular / Special)                                                                                                                                                                                                                      | Status = Done                                                                                                                                                                                             | **Loan** goes to Bank File Ready. **Cash** goes to Ask 90% Payment for Dispatch |
 
 The core handoff is **Document Verification → Login PMSG**; once Login is done the case is on
 **both Site Survey and Payment Work Start** (parallel: the case stage moves to Payment Work Start and the
@@ -152,14 +206,14 @@ The step names come from the owner's Google Sheet. That sheet was private, so
 the popup fields below are **placeholders** until the owner gives the real
 columns.
 
-| # | Step key | Page (route) | Popup fields (placeholder) |
-|---|----------|--------------|----------------------------|
-| 1 | `bankFileReady` | `/bank-file-ready` | Status, Remark |
-| 2 | `loanIssue` (Loan Issue Cases Resolution) | `/loan-issue-resolution` | Status, Remark |
-| 3 | `fileSubmission` (File Submission in Bank) | `/file-submission` | Status, Bank (text), Branch (text), Bank Quotation (amount), Responsible Person (dropdown: Alok, Kishan, Pankaj, Mahesh, Akash), Remark |
-| 4 | `firstInstallment` (Receive First Installment) | `/first-installment` | Status, Amount Received, Remark |
-| 5 | `receiveDp` (Receive DP) | `/receive-dp` | Status, Amount Received, Remark |
-| 6 | `dispatch` | `/dispatch` | Status, Remark |
+| #   | Step key                                       | Page (route)             | Popup fields (placeholder)                                                                                                              |
+| --- | ---------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `bankFileReady`                                | `/bank-file-ready`       | Status, Remark                                                                                                                          |
+| 2   | `loanIssue` (Loan Issue Cases Resolution)      | `/loan-issue-resolution` | Status, Remark                                                                                                                          |
+| 3   | `fileSubmission` (File Submission in Bank)     | `/file-submission`       | Status, Bank (text), Branch (text), Bank Quotation (amount), Responsible Person (dropdown: Alok, Kishan, Pankaj, Mahesh, Akash), Remark |
+| 4   | `firstInstallment` (Receive First Installment) | `/first-installment`     | Status, Amount Received, Remark                                                                                                         |
+| 5   | `receiveDp` (Receive DP)                       | `/receive-dp`            | Status, Amount Received, Remark                                                                                                         |
+| 6   | `dispatch`                                     | `/dispatch`              | Status, Remark                                                                                                                          |
 
 - Status is Done / Not Done. **Not Done** needs a Remark and keeps the case in
   Pending (hold). **Done** moves it to the next loan step; after Dispatch the
@@ -183,13 +237,13 @@ From the owner's Installation Google Sheet (tab "FMS"; its Config tab says
 working hours 10:00-18:00, Sunday off). Both Loan and Cash cases enter here after
 their Dispatch; after Tariff Code Check they move to Closure.
 
-| # | Step key | Page (route) | Who | How | When (sheet) | Popup fields |
-|---|----------|--------------|-----|-----|--------------|--------------|
-| 1 | `assignInstaller` | `/assign-installer` | Manoj | WhatsApp in Daily Group | 24 | Installer Name, Status, Working Remarks |
-| 2 | `inspectionFile` (Submit Inspection File) | `/submit-inspection-file` | Soniya | Geotag, DCR, Work Completion, Inspection Report | 14 | Status, Remark |
-| 3 | `meterInspection` (Meter Install & Inspection) | `/meter-install-inspection` | Satyakumar | Follow open sites & JEs daily | 96 | Status, Working Remarks |
-| 4 | `generationWifi` (Generation & Wifi) | `/generation-wifi` | Arun | Site visit & configuration | 24 | Status, Working Remarks |
-| 5 | `tariffCheck` (Tariff Code Check, CG Only) | `/tariff-code-check` | Soniya | CSPDCL portal | 32 | Status, Remark |
+| #   | Step key                                       | Page (route)                | Who        | How                                             | When (sheet) | Popup fields                            |
+| --- | ---------------------------------------------- | --------------------------- | ---------- | ----------------------------------------------- | ------------ | --------------------------------------- |
+| 1   | `assignInstaller`                              | `/assign-installer`         | Manoj      | WhatsApp in Daily Group                         | 24           | Installer Name, Status, Working Remarks |
+| 2   | `inspectionFile` (Submit Inspection File)      | `/submit-inspection-file`   | Soniya     | Geotag, DCR, Work Completion, Inspection Report | 14           | Status, Remark                          |
+| 3   | `meterInspection` (Meter Install & Inspection) | `/meter-install-inspection` | Satyakumar | Follow open sites & JEs daily                   | 96           | Status, Working Remarks                 |
+| 4   | `generationWifi` (Generation & Wifi)           | `/generation-wifi`          | Arun       | Site visit & configuration                      | 24           | Status, Working Remarks                 |
+| 5   | `tariffCheck` (Tariff Code Check, CG Only)     | `/tariff-code-check`        | Soniya     | CSPDCL portal                                   | 32           | Status, Remark                          |
 
 - Status Done / Not Done like the loan steps (Not Done needs a Remark and keeps
   the case in Pending). Shared form `makeSimpleForm`, page `components/InstallStepPage.js`.
@@ -207,9 +261,9 @@ their Dispatch; after Tariff Code Check they move to Closure.
 
 Defined in `CLOSURE_FLOW` in `lib/workflow.js`. Sidebar group "CLOSURE".
 
-| # | Step key | Page (route) | Moves on when | Next |
-|---|----------|--------------|---------------|------|
-| 31 | `warranty` (Warranty & Handover) | `/warranty` | Balance cleared, warranty complete and customer handover kit given | Completed |
+| #   | Step key                         | Page (route) | Moves on when                                                      | Next      |
+| --- | -------------------------------- | ------------ | ------------------------------------------------------------------ | --------- |
+| 31  | `warranty` (Warranty & Handover) | `/warranty`  | Balance cleared, warranty complete and customer handover kit given | Completed |
 
 - Balance Status is Cleared / Pending. Pending requires a remark, blocks
   warranty/document handover and keeps the case on hold.
@@ -231,12 +285,12 @@ Defined in `CASH_FLOW` in `lib/workflow.js`. Sidebar group "CASH PROCESS". Taken
 from the owner's Cash Google Sheet (tab "FMS", readable once shared as "anyone
 with the link"). The sheet has Who / How / When per step:
 
-| # | Step key | Page (route) | Who | How | When (sheet) | Popup fields |
-|---|----------|--------------|-----|-----|--------------|--------------|
-| 1 | `cashAskPayment` (Ask 90% Payment for Dispatch) | `/cash-ask-payment` | Ankita Ahuja | Call | Whenever needed | Status, Remark (placeholder) |
-| 2 | `cashPaymentReceived` (90% Payment Received?) | `/cash-payment-received` | Ankita | Message in Finance Group | 40 | 90% Payment Received? (Yes / No), Remark |
-| 3 | `cashApproval` (Check for Approval) | `/cash-approval` | Chaitan | Get Director approval, register signed, for dispatch without payment | 16 | SN - Approver (text), Status, Remark |
-| 4 | `cashDispatch` (Dispatch) | `/cash-dispatch` | Manoj | Dispatch Form | 24 | Status, Remark (placeholder) |
+| #   | Step key                                        | Page (route)             | Who          | How                                                                  | When (sheet)    | Popup fields                             |
+| --- | ----------------------------------------------- | ------------------------ | ------------ | -------------------------------------------------------------------- | --------------- | ---------------------------------------- |
+| 1   | `cashAskPayment` (Ask 90% Payment for Dispatch) | `/cash-ask-payment`      | Ankita Ahuja | Call                                                                 | Whenever needed | Status, Remark (placeholder)             |
+| 2   | `cashPaymentReceived` (90% Payment Received?)   | `/cash-payment-received` | Ankita       | Message in Finance Group                                             | 40              | 90% Payment Received? (Yes / No), Remark |
+| 3   | `cashApproval` (Check for Approval)             | `/cash-approval`         | Chaitan      | Get Director approval, register signed, for dispatch without payment | 16              | SN - Approver (text), Status, Remark     |
+| 4   | `cashDispatch` (Dispatch)                       | `/cash-dispatch`         | Manoj        | Dispatch Form                                                        | 24              | Status, Remark (placeholder)             |
 
 - **Ask 90% Payment popup**: Status is only "Send For Approval" (no Done / Not Done) and there is a
   **Send payment details to customer** button (`POST /api/cases/[id]/send-payment-details`,
@@ -340,17 +394,32 @@ with the link"). The sheet has Who / How / When per step:
   see everything. Enforced in `GET /api/cases`, `GET /api/leads` (so Dashboard and Reports
   follow) and in the step submit, issue and lead write routes.
 
+- **Assignment log + message.** Every assign (and every take-back) is logged in table `urjacon_assignments`
+  (`supabase/add_assignments.sql`, also in `schema.sql`; dev without Supabase uses `data/assignments.json`): one row per
+  assignee with the record, page, assigned by, **assign date** (the day it is assigned), `assigned_at` and `seen_at`. `lib/assignments.js` writes it from `POST /api/assign`; a failed log never blocks
+  the assignment. The assignee gets the message in the **bell** (red count = unread; opening it marks read;
+  `GET /api/assignments?mine=1`). `logAssignments` is where a WhatsApp / SMS message can be added later.
+- **Temporary vs permanent assignment.** The **Assign button on any page** is **temporary** (`kind = temporary`): only
+  the chosen people (plus admin / management) get that one piece of work, until it moves to its next step. **Settings >
+  Assignees** is **permanent** (`kind = permanent`): those people get all work that arrives on that page, now and in
+  future, until the admin changes it. Saving it logs who got the page (and who lost it) with the assign date and sends the
+  bell message. The assign date is simply the day it is assigned (set by the server, no date input in the dialogs). The Assign Work page shows the Type of every row.
+
+- **Assign Work page** (`/assign-work`, common page like Reports): Active / History tabs with Assign Date, Assigned At,
+  customer, BP SC number, page, assigned to / by, Read status and Active / Closed / Removed. Admin and management see
+  all; everyone else sees only the work assigned to them. Active = the record still carries that assignment.
+
 BP SC Number remains unique across all converted cases.
 
 ## 4. Dates: Timestamp, Planned Date, Actual Date
 
 Every step page shows these three, per case, for **that step**:
 
-| Field | Meaning |
-|-------|---------|
-| Timestamp | When the case arrived at this step (the previous step's submit time; for Name Check, when the case was added) |
-| Planned Date | Timestamp + that step's TAT in days |
-| Actual Date | When this step was submitted as done. Empty while pending or on hold |
+| Field        | Meaning                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| Timestamp    | When the case arrived at this step (the previous step's submit time; for Name Check, when the case was added) |
+| Planned Date | Timestamp + that step's TAT in days                                                                           |
+| Actual Date  | When this step was submitted as done. Empty while pending or on hold                                          |
 
 - TAT lives in `TAT_DAYS` in `lib/workflow.js`. All are `0` for now, so Planned
   Date equals Timestamp. When a TAT is decided, change the number there. It only
@@ -395,7 +464,7 @@ Light theme only (`color-scheme: light`). Clean, professional dashboard look.
 - **Brand teal**: `bg-brand` `#2fa89a`, `brand-dark` `#1f8579`, `brand-50`,
   `brand-100`. Defined in `app/globals.css`. Page background `#f5f7f9`.
 - Cards: `rounded-2xl border border-slate-200/80 bg-white` with a very light
-  shadow. Popups: `rounded-2xl`, backdrop blur, pop-in animation.
+  shadow. Popups: `rounded-2xl`, solid dim backdrop (no blur, so it never lags while scrolling), pop-in animation; the page behind is locked and the popup body uses `overscroll-contain`.
 - Inputs use the shared `.field` class (40px high, rounded, teal focus ring).
   Do not invent new input styles. (The Google-Forms look for Site Survey was
   rejected: all popups use the same system style.)
@@ -430,7 +499,7 @@ Light theme only (`color-scheme: light`). Clean, professional dashboard look.
   past their planned date. A case is considered overdue only when that step has
   a non-zero configured TAT; the current placeholder `TAT_DAYS = 0` does not
   create false overdue alerts.
-- Lead Health shows Hot / Warm / Cold open leads. Payment Mode shows cases whose
+- Lead Health shows Interested / Follow up Required / Not Interested open leads (the Lead Temperature dropdown values). Payment Mode shows cases whose
   Cash/Loan decision is known. Delivery Health shows conversion, completion,
   installation workload, holds and overdue work.
 - Recent Activity is derived from lead `updatedAt` and case step `submittedAt`;
@@ -468,8 +537,8 @@ Light theme only (`color-scheme: light`). Clean, professional dashboard look.
   delete, deactivate or demote yourself, and at least one active admin must
   remain.
 - **Settings** (`/settings`, admin only):
-  - *User Management*: add, edit (name, role, password, active) and delete users.
-  - *System Masters*: lists of values: Branch, Dealer, Liaisoning, Product Code,
+  - _User Management_: add, edit (name, role, password, active) and delete users.
+  - _System Masters_: lists of values: Branch, Dealer, Liaisoning, Product Code,
     Bank, Responsible Person, Installer (`lib/masterTypes.js`, stored in
     `data/masters.json`). Branch, Dealer, Liaisoning and Product Code feed the
     **Lead** form suggestions.
@@ -516,12 +585,27 @@ No other file should need to change. If it does, the structure is wrong.
 {
   "id": "C-0001",
   "timestamp": "ISO date (when added)",
-  "bpScNumber": "", "customerName": "", "village": "", "productCode": "",
-  "branch": "", "dealer": "", "liaisoning": "", "route": "", "dealAmount": 0,
+  "bpScNumber": "",
+  "customerName": "",
+  "village": "",
+  "productCode": "",
+  "branch": "",
+  "dealer": "",
+  "liaisoning": "",
+  "route": "",
+  "dealAmount": 0,
   "stage": "login | nameCheck | siteSurvey | paymentWorkStart | bankFileReady | loanIssue | fileSubmission | firstInstallment | receiveDp | dispatch | cashAskPayment | cashPaymentReceived | cashApproval | cashDispatch | assignInstaller | inspectionFile | meterInspection | generationWifi | tariffCheck | warranty | done",
-  "steps": { "<stepKey>": { "...step fields": "", "status": "done | hold",
-                            "submittedAt": "ISO", "submittedBy": "" } },
-  "schedule": { "<stepKey>": { "timestamp": "", "plannedDate": "", "actualDate": null } }
+  "steps": {
+    "<stepKey>": {
+      "...step fields": "",
+      "status": "done | hold",
+      "submittedAt": "ISO",
+      "submittedBy": ""
+    }
+  },
+  "schedule": {
+    "<stepKey>": { "timestamp": "", "plannedDate": "", "actualDate": null }
+  }
 }
 ```
 
@@ -555,24 +639,24 @@ No other file should need to change. If it does, the structure is wrong.
 
 ## 9. API
 
-| Method | Route | Purpose |
-|--------|-------|---------|
-| GET | `/api/leads` | All leads |
-| POST | `/api/leads` | Add an open lead |
-| PUT / DELETE | `/api/leads/[id]` | Update/reopen/lose a lead; admin-only cleanup delete |
-| POST | `/api/leads/[id]/send-quotation` | Mark quotation sent; future WhatsApp delivery integration point |
-| POST | `/api/leads/[id]/convert` | Confirm a qualified lead and create its linked case |
-| GET | `/api/cases` | All cases |
-| POST | `/api/cases` | Disabled: returns an error directing the user to confirm a lead |
-| PUT / DELETE | `/api/cases/[id]` | Edit / delete a case (no UI uses these right now) |
-| POST | `/api/cases/[id]/submit` | Submit a step: `{ step, data }`. 409 if the case is not at that step |
-| POST | `/api/auth/login`, `/api/auth/logout` | Sign in / out (login is public) |
-| GET | `/api/auth/me` | Signed-in user (401 if the session ended) |
-| GET / POST / PUT / DELETE | `/api/users`, `/api/users/[id]` | User management (admin only) |
-| GET | `/api/masters` | All masters (any signed-in user) |
-| POST / DELETE | `/api/masters` | Add / remove a master value (admin only) |
-| POST | `/api/upload` | Upload a file (JPG/PNG/WEBP/GIF/PDF, max 5 MB) |
-| GET | `/api/files/[name]` | Serve an uploaded file |
+| Method                    | Route                                 | Purpose                                                              |
+| ------------------------- | ------------------------------------- | -------------------------------------------------------------------- |
+| GET                       | `/api/leads`                          | All leads                                                            |
+| POST                      | `/api/leads`                          | Add an open lead                                                     |
+| PUT / DELETE              | `/api/leads/[id]`                     | Update/reopen/lose a lead; admin-only cleanup delete                 |
+| POST                      | `/api/leads/[id]/send-quotation`      | Mark quotation sent; future WhatsApp delivery integration point      |
+| POST                      | `/api/leads/[id]/convert`             | Confirm a qualified lead and create its linked case                  |
+| GET                       | `/api/cases`                          | All cases                                                            |
+| POST                      | `/api/cases`                          | Disabled: returns an error directing the user to confirm a lead      |
+| PUT / DELETE              | `/api/cases/[id]`                     | Edit / delete a case (no UI uses these right now)                    |
+| POST                      | `/api/cases/[id]/submit`              | Submit a step: `{ step, data }`. 409 if the case is not at that step |
+| POST                      | `/api/auth/login`, `/api/auth/logout` | Sign in / out (login is public)                                      |
+| GET                       | `/api/auth/me`                        | Signed-in user (401 if the session ended)                            |
+| GET / POST / PUT / DELETE | `/api/users`, `/api/users/[id]`       | User management (admin only)                                         |
+| GET                       | `/api/masters`                        | All masters (any signed-in user)                                     |
+| POST / DELETE             | `/api/masters`                        | Add / remove a master value (admin only)                             |
+| POST                      | `/api/upload`                         | Upload a file (JPG/PNG/WEBP/GIF/PDF, max 5 MB)                       |
+| GET                       | `/api/files/[name]`                   | Serve an uploaded file                                               |
 
 Validation always happens on the server (`lib/validate.js`), even if the form
 also checks.

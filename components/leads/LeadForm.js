@@ -36,7 +36,7 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
     fetch("/api/masters").then((r) => (r.ok ? r.json() : {})).then((m) => setBrands(m.brand ?? [])).catch(() => {});
   }, []);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  // Older leads may hold a value outside the new lists (Hot / Warm / Cold, other kW); keep it selectable.
+  // Older leads may hold a value outside the new lists (other kW); keep it selectable.
   const temperatureOptions = !form.temperature || TEMPERATURES.includes(form.temperature) ? TEMPERATURES : [...TEMPERATURES, form.temperature];
   const brandOptions = !form.brand || brands.includes(form.brand) ? brands : [...brands, form.brand];
   const kwOptions = !form.kwWanted || KW_OPTIONS.some(([v]) => v === String(form.kwWanted)) ? KW_OPTIONS : [...KW_OPTIONS, [String(form.kwWanted), `${form.kwWanted} kW`]];
@@ -83,13 +83,13 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
       <fieldset disabled={readOnly}>
         <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Customer and source</legend>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label="BP SC Number" required={!lead} value={form.bpScNumber} onChange={(v) => set("bpScNumber", v)} />
           <Field label="Customer Name" required value={form.customerName} onChange={(v) => set("customerName", v)} />
           <Field label="Mobile Number" required type="tel" value={form.mobile} onChange={(v) => set("mobile", v)} />
           <Field label="Email ID" type="email" value={form.email} onChange={(v) => set("email", v)} />
           <Select label="Lead Source" required value={form.source} options={SOURCES} onChange={(v) => set("source", v)} />
           <Select label="State" required value={form.state} options={["Chhattisgarh", "Odisha"]} onChange={(v) => set("state", v)} />
           <Field label="Village" value={form.village} onChange={(v) => set("village", v)} />
-          <Field label="BP SC Number" value={form.bpScNumber} onChange={(v) => set("bpScNumber", v)} />
           <label className="block">
             <Label>Live Location</Label>
             <button type="button" disabled={readOnly || locationLoading} onClick={captureLocation} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-brand px-3 text-sm font-semibold text-brand-dark transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60">

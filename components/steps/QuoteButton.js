@@ -52,7 +52,7 @@ function QuotationPopup({ row, title, onClose }) {
 
   return createPortal(
     <div
-      className="anim-fade fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
+      className="anim-fade fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div role="dialog" aria-modal="true" className="anim-pop flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_-12px_rgba(15,23,42,0.35)]">
@@ -65,7 +65,7 @@ function QuotationPopup({ row, title, onClose }) {
             <X size={18} />
           </button>
         </div>
-        <div className="overflow-y-auto px-6 py-5">
+        <div className="overflow-y-auto overscroll-contain px-6 py-5">
           <QuotationSummary quotation={row} title={title} />
         </div>
       </div>

@@ -1,4 +1,6 @@
 // Adds one demo record to every page, using the app's own API so every rule is validated.
+// Follows the current flow: Call Tracker "Document given" -> Document Receive (price set there) ->
+// Document Verification -> Login -> [Name Correction | Owner Change] -> Agreement -> Survey / Payment.
 //   1. npm run build && npx next start -p 3101      (or any running copy of the app)
 //   2. node scripts/seed-demo-data.mjs http://localhost:3101
 // Needs the team logins from scripts/seed-team-users.mjs. Existing records are never touched.
@@ -75,9 +77,9 @@ const NAMES = [
 
 // ---- one case per page: [target stage, payment mode, cash payment received?, branch] ----
 const PLAN = [
-  ["nameCheck", "Loan", 0, "Sarangarh"], ["login", "Loan", 0, "Saraipali"], ["siteSurvey", "Cash", 0, "Sarangarh"],
-  ["paymentWorkStart", "Loan", 0, "Padampur"],
-  ["agreementUpload", "Loan", 0, "Sarangarh"], ["janSamarth", "Loan", 0, "Saraipali"], ["bankFileReady", "Loan", 0, "Bargarh"],
+  ["nameCheck", "Loan", 0, "Sarangarh"], ["login", "Loan", 0, "Saraipali"], ["nameCorrection", "Loan", 0, "Sarangarh"],
+  ["ownerChange", "Cash", 0, "Saraipali"], ["agreementUpload", "Loan", 0, "Sarangarh"], ["siteSurvey", "Cash", 0, "Sarangarh"],
+  ["paymentWorkStart", "Loan", 0, "Padampur"], ["janSamarth", "Loan", 0, "Saraipali"], ["bankFileReady", "Loan", 0, "Bargarh"],
   ["fileSubmission", "Loan", 0, "Sarangarh"], ["loanIssue", "Loan", 0, "Jharband"], ["firstInstallment", "Loan", 0, "Saraipali"],
   ["receiveDp", "Loan", 0, "Sohela"], ["dispatch", "Loan", 0, "Sarangarh"],
   ["cashAskPayment", "Cash", 0, "Saraipali"], ["cashPaymentReceived", "Cash", 0, "Sarangarh"], ["cashApproval", "Cash", "No", "Saraipali"],
@@ -95,7 +97,7 @@ const PLAN = [
 // who submits each step (a user whose role has that page)
 const WHO = {
   documentReceive: "reshmi",
-  nameCheck: "reshmi", login: "tripti", siteSurvey: "arun", paymentWorkStart: "ankita", agreementUpload: "soniya",
+  nameCheck: "reshmi", login: "tripti", nameCorrection: "soniya", ownerChange: "soniya", siteSurvey: "arun", paymentWorkStart: "ankita", agreementUpload: "soniya",
   janSamarth: "reshmi", bankFileReady: "reshmi", fileSubmission: "alok", loanIssue: "reshmi", firstInstallment: "alok",
   receiveDp: "chetan", cashReceipt: "chetan", dispatch: "sameer", cashDispatch: "jitendra", cashAskPayment: "ankita",
   cashPaymentReceived: "ankita", cashApproval: "ankita", subsidyChequeReady: "chetan", assignInstaller: "arun",
@@ -126,20 +128,30 @@ function payload(step, c) {
   switch (step) {
     case "documentReceive": {
       const doc = () => ({ name: c.name, files: f(files.png), reviewStatus: "Proper" });
-      return { aadhaar: doc(), pan: doc(), passbook: doc(), bill: doc(), receivedThrough: "WhatsApp", receivedDate: day(20), systemType: c.index % 2 ? "Tata" : "Non-Tata" };
+      // The case price is set here (plain fields); later steps read it.
+      return { aadhaar: doc(), pan: doc(), passbook: doc(), bill: doc(), receivedThrough: "WhatsApp", receivedDate: day(20), systemType: c.index % 2 ? "Tata" : "Non-Tata", paymentMode: c.mode,
+        pricing: { kw: c.kw, price: c.price, centralSubsidy: 78000, stateSubsidy: c.state === "Odisha" ? 60000 : 30000, productCode: `PMSG-${c.kw}KW`, gridType: "On-grid", dcrType: "DCR", panelBrand: "Tata" } };
     }
     case "nameCheck":
       return { verified: { aadhaar: true, pan: true, passbook: true, bill: true }, remark: "" };
-    case "login": return { loginCheck: "Login Done", applicationNo: c.appNo, remark: "OTP shared by consumer", images: f(files.png) };
+    case "login":
+      if (c.routeTo) return { route: c.routeTo, remark: c.routeTo === "ownerChange" ? "Owner of the connection expired, owner change needed" : "Name spelling differs on the electricity bill" };
+      return { loginCheck: "Login Done", applicationNo: c.appNo, remark: "OTP shared by consumer", images: f(files.png) };
+    case "nameCorrection": return { ...done, correctedName: c.name, correctionFiles: f(files.pdf) };
+    case "ownerChange": return { ...done, newOwnerName: c.name, ownerFiles: f(files.pdf) };
     case "siteSurvey":
       return { customerName: c.name, contactNumber: c.mobile, village: c.village, surveyDate: day(14), surveyorName: "Arun",
-        smartMeterPresent: odisha ? "No" : "Yes", materialNeeded: `${c.kw} kW: ${c.kw === 3 ? "6" : "10"} x 545 Wp panels, ${c.kw} kW inverter, structure, cables, ACDB/DCDB` };
+        smartMeterPresent: odisha ? "No" : "Yes", materialNeeded: `${c.kw} kW: ${c.kw === 3 ? "6" : "10"} x 545 Wp panels, ${c.kw} kW inverter, structure, cables, ACDB/DCDB`,
+        phaseType: c.kw === 3 ? "Single Phase" : "Three Phase", connectionCategory: "Domestic", meterType: odisha ? "Digital" : "Smart", roofType: "Concrete", mountingType: "RCC Structure",
+        structureSize: "4x6", roofOrientation: "South", materialsAvailable: ["Cement", "Balu"], roofCondition: "Good", roofAge: 6, usableArea: 420, shading: "No Shade", accessDetails: "Easy",
+        panelInverterDistance: 18, inverterDbDistance: 12, ventilation: "Good", earthingDistance: 25, wifiLan: "Yes", vehicleAccess: "Easy", ladderNeeded: "Yes", storageAvailable: "Yes",
+        obstacles: "None", installationDate: day(-10), photosTaken: ["Roof top view (showing available panel area)", "Main DB (inside and outside)"], photoPdf: f(files.pdf), surveyorRemarks: "Roof is clear, customer will arrange sand and cement" };
     case "paymentWorkStart": return { cashOrLoan: c.mode, workStatus: "Done", corridor: "Regular" };
     case "agreementUpload": return { ...done, agreementDate: day(12), stampAmount: odisha ? 10 : 50, agreementFiles: f(files.pdf) };
-    case "janSamarth": return { ...done, janSamarthReference: `JS-${c.bp.slice(-6)}`, approvalDate: day(11), bankFileFiles: f(files.pdf) };
-    case "bankFileReady": return { ...done, remark: "KYC, quotation, e-token and feasibility checked" };
-    case "fileSubmission": return { ...done, bank: c.bank, bankBranch: c.branch, bankQuotation: c.price, responsiblePerson: c.owner };
-    case "loanIssue": return { ...done, phsDate: day(9), loanDecision: "Sanctioned" };
+    case "janSamarth": return { ...done, approvalDate: day(11), bankFileFiles: f(files.pdf) };
+    case "bankFileReady": return { ...done, bank: c.bank, bankBranch: c.branch, bankQuotation: c.price, responsiblePerson: c.owner, remark: "KYC, quotation, e-token and feasibility checked" };
+    case "fileSubmission": return { ...done, submissionFiles: f(files.pdf) };
+    case "loanIssue": return { ...done, loanDecision: "Sanctioned" };
     case "firstInstallment": return { ...done, amount: Math.round(c.price * 0.7), remark: "Bank 70% received" };
     case "receiveDp": return { ...done, amount: Math.round(c.price * 0.05), remark: "Down payment received" };
     case "cashAskPayment": return { ...done, remark: "Customer asked to pay 90%" };
@@ -150,8 +162,8 @@ function payload(step, c) {
     case "cashReceipt":
       return { ...done, receiptNo: `RCT-${c.bp.slice(-5)}`, amountReceived: c.mode === "Loan" ? Math.round(c.price * 0.75) : Math.round(c.price * 0.9), receiptDate: day(8), signedBy: "Chetan", receiptStatus: c.cashPaid === "No" ? "Dispatch Without Cash or Down Payment" : "90% Cash Received", ...(c.cashPaid === "No" ? { remark: "MD approved dispatch before payment" } : {}), receiptFiles: f(files.pdf) };
     case "dispatch": case "cashDispatch":
-      return { ...done, dispatchDate: day(7), materialList: `${c.kw} kW rooftop kit as per survey report`, dispatchedBy: "Sameer", deliveredBy: "Jitendra",
-        ...(odisha ? { tpwodlReference: `TPW-${c.bp.slice(-6)}`, meterChargePaidDate: day(8) } : {}) };
+      return { ...done, dispatchDate: day(7), materialList: `Solar panel 545 Wp — ${c.kw === 3 ? 6 : 10} nos\n${c.kw} kW on-grid inverter — 1 nos\nDC cable — 36 m\nAC cable — 12 m`, dispatchedBy: "Sameer", deliveredBy: "Jitendra",
+        ...(odisha && step === "cashDispatch" ? { tpwodlReference: `TPW-${c.bp.slice(-6)}` } : {}) };
     case "assignInstaller": return { ...done, installerName: "Ravi Installer Team", remark: "Assigned in Daily Group" };
     case "installationComplete":
       return { ...done, installationDate: day(5), installerName: "Ravi Installer Team", panelSerialFiles: f(files.png), inverterSerialFiles: f(files.png), plantGeotagFiles: f(files.png) };
@@ -160,8 +172,8 @@ function payload(step, c) {
     case "portalInstallation": return { ...done, applicationNo: c.appNo, submissionDate: day(4) };
     case "inspectionFile":
       return { ...done, inspectionRoute: odisha ? "TPWODL Portal" : "CSEB / CSPDCL", filedDate: day(3), filedBy: odisha ? "Soniya" : "Satya", inspectionFiles: f(files.pdf) };
-    case "meterInspection": return { ...done, meterType: "Bidirectional Meter", meterSource: odisha ? "TPWODL" : "Genus", meterFittedDate: day(3), bidirectional: "Yes" };
-    case "jeInspection": return { ...done, jeVisitDate: day(2), jeName: "JE Mr. Sahu", jeApproval: "Approved" };
+    case "meterInspection": return { ...done, meterImages: f(files.png), remark: "Meter installed and photographed" };
+    case "jeInspection": return { ...done, jeVisitDate: day(2), jeApproval: "Approved" };
     case "generationWifi": return { ...done, configurationDate: day(2), inverterId: `INV${c.bp.slice(-6)}`, loginShared: "Yes", plantSwitchedOn: "Yes" };
     case "portalInspectionApproval": return { ...done, portalApprovalDate: day(1), reverification: "No", duplicateSerial: "No" };
     case "tariffCheck": return { ...done, remark: "Tariff code verified on portal" };
@@ -179,7 +191,7 @@ function payload(step, c) {
 const leadBody = (n, extra = {}) => ({
   customerName: n.name, mobile: n.mobile, village: n.village, address: `${n.village}, ${n.branch}`, state: BRANCHES[n.branch].state,
   email: `${n.name.split(" ")[0].toLowerCase()}${n.i}@gmail.com`, source: "Field Visit", monthlyBill: 2400, kwWanted: n.kw,
-  bpScNumber: n.bp, productCode: `PMSG-${n.kw}KW`, temperature: "Warm", branch: n.branch, dealer: "Bantu Sahu", liaisoning: "Satya Kumar Sahu",
+  bpScNumber: n.bp, productCode: `PMSG-${n.kw}KW`, temperature: "Follow up Required", branch: n.branch, dealer: "Bantu Sahu", liaisoning: "Satya Kumar Sahu",
   latitude: 21.59 + n.i / 1000, longitude: 83.08 + n.i / 1000, locationAccuracy: 12, locationCapturedAt: new Date().toISOString(), ...extra,
 });
 const person = (i, branch) => {
@@ -197,21 +209,16 @@ const QUOTE = (n, ref) => ({
   quotationNotes: "Price includes installation, net-metering file and 5 year service.",
 });
 
-async function newLead(n, extra) { return api("ankita", "POST", "/api/leads", leadBody(n, extra)); }
+async function newLead(n, extra) { return api("admin", "POST", "/api/leads", leadBody(n, extra)); }
 
 async function toCase(n, mode) {
-  let lead = await newLead(n, { temperature: "Hot", outcome: "Interested", nextFollowUp: "" });
-  lead = await api("ankita", "PUT", `/api/leads/${lead.id}`, {
-    ...lead, ...QUOTE(n, `QT-2026-${String(1100 + n.i)}`), leadStage: "quotation",
-    followUp: { type: "Call", outcome: "Send quotation", remark: "Customer interested, asked for price" },
-  });
-  const sent = (await api("ankita", "POST", `/api/leads/${lead.id}/send-quotation`)).lead;
-  lead = await api("ankita", "PUT", `/api/leads/${lead.id}`, {
-    ...sent, leadStage: "documentsReady", bpScNumber: n.bp, paymentMode: mode, route: "Route 1",
+  let lead = await newLead(n, { temperature: "Interested", outcome: "Interested", nextFollowUp: "" });
+  lead = await api("admin", "PUT", `/api/leads/${lead.id}`, {
+    ...lead, leadStage: "documentsReady", bpScNumber: n.bp, paymentMode: mode, route: "Route 1",
     documents: { aadhaar: true, pan: true, passbook: true, bill: true, terracePhoto: true },
     followUp: { type: "Visit", outcome: "Document Given", remark: "Documents collected from customer" },
   });
-  return (await api("ankita", "POST", `/api/leads/${lead.id}/convert`)).case;
+  return (await api("admin", "POST", `/api/leads/${lead.id}/convert`)).case;
 }
 
 async function main() {
@@ -223,16 +230,16 @@ async function main() {
   // 1. open leads for the three lead pages (+ one lost lead)
   if (!ONLY) {
   const L = (i) => person(200 + i, ["Sarangarh", "Saraipali", "Sarangarh", "Padampur", "Bargarh"][i]);
-  const l1 = await newLead(L(0), { temperature: "Hot", nextFollowUp: new Date(Date.now() + 86400000).toISOString().slice(0, 16), outcome: "New enquiry" });
-  const l2 = await newLead(L(1), { temperature: "Warm", source: "Agent", agent: "", commission: 5000, nextFollowUp: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16) });
-  await api("ankita", "PUT", `/api/leads/${l2.id}`, { ...l2, leadStage: "contacted", followUp: { type: "Call", outcome: "Call back later", remark: "Asked to call after Sunday" }, nextFollowUp: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16) });
-  const l3 = await newLead(L(2), { temperature: "Hot" });
-  await api("ankita", "PUT", `/api/leads/${l3.id}`, { ...l3, ...QUOTE(L(2), "QT-2026-1301"), leadStage: "quotation", followUp: { type: "Call", outcome: "Send quotation", remark: "Wants 3 kW system" } });
-  const l4 = await newLead(L(3), { temperature: "Warm" });
-  const l4q = await api("ankita", "PUT", `/api/leads/${l4.id}`, { ...l4, ...QUOTE(L(3), "QT-2026-1302"), leadStage: "quotation", followUp: { type: "Call", outcome: "Send quotation", remark: "Odisha customer, subsidy cheque interest" } });
-  await api("ankita", "POST", `/api/leads/${l4.id}/send-quotation`);
-  const l5 = await newLead(L(4), { temperature: "Cold" });
-  await api("ankita", "PUT", `/api/leads/${l5.id}`, { ...l5, action: "lost", lostReason: "Customer already registered with another vendor (H02)" });
+  const l1 = await newLead(L(0), { temperature: "Interested", nextFollowUp: new Date(Date.now() + 86400000).toISOString().slice(0, 16), outcome: "New enquiry" });
+  const l2 = await newLead(L(1), { temperature: "Follow up Required", source: "Agent", agent: "", commission: 5000, nextFollowUp: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16) });
+  await api("admin", "PUT", `/api/leads/${l2.id}`, { ...l2, leadStage: "contacted", followUp: { type: "Call", outcome: "Call back later", remark: "Asked to call after Sunday" }, nextFollowUp: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16) });
+  const l3 = await newLead(L(2), { temperature: "Interested" });
+  await api("admin", "PUT", `/api/leads/${l3.id}`, { ...l3, ...QUOTE(L(2), "QT-2026-1301"), leadStage: "quotation", followUp: { type: "Call", outcome: "Send quotation", remark: "Wants 3 kW system" } });
+  const l4 = await newLead(L(3), { temperature: "Follow up Required" });
+  const l4q = await api("admin", "PUT", `/api/leads/${l4.id}`, { ...l4, ...QUOTE(L(3), "QT-2026-1302"), leadStage: "quotation", followUp: { type: "Call", outcome: "Send quotation", remark: "Odisha customer, subsidy cheque interest" } });
+  await api("admin", "POST", `/api/leads/${l4.id}/send-quotation`);
+  const l5 = await newLead(L(4), { temperature: "Not Interested" });
+  await api("admin", "PUT", `/api/leads/${l5.id}`, { ...l5, action: "lost", lostReason: "Customer already registered with another vendor (H02)" });
   for (const l of [l1, l2, l3, l4]) await assignTo("ankita", "lead", l.id);
   created.leads.push(l1.id, l2.id, l3.id, l4.id, l5.id);
   console.log("leads:", created.leads.join(" "));
@@ -246,7 +253,7 @@ async function main() {
     const n = person(k + 1, branch);
     const row = await toCase(n, mode);
     created.cases.push(row.id);
-    cases.push({ id: row.id, row, target, ctx: { ...n, index: k, mode, state: BRANCHES[branch].state, owner: BRANCHES[branch].owner,
+    cases.push({ id: row.id, row, target, ctx: { ...n, index: k, mode, state: BRANCHES[branch].state, owner: BRANCHES[branch].owner, routeTo: ["nameCorrection", "ownerChange"].includes(target) ? target : "",
       bank: ["State Bank of India", "Bank of India", "Union Bank of India", "Punjab National Bank"][k % 4],
       cashPaid: cashPaid || "Yes", appNo: `PMSG${String(2026110000 + n.i * 73)}` } });
     console.log("case", row.id, "->", target);
@@ -261,10 +268,10 @@ async function main() {
         return `${id} at ${target}`;
       }
       // Site Survey runs in parallel with Payment Work Start and must be filled before dispatch: fill it as the payment steps begin.
-      const surveyOpen = row.steps?.login?.status === "done" && row.steps?.siteSurvey?.status !== "done";
+      const surveyOpen = row.steps?.login?.status === "done" && row.steps?.agreementUpload?.status === "done" && row.steps?.siteSurvey?.status !== "done";
       if (target === "siteSurvey" && surveyOpen) return `${id} at siteSurvey (parallel)`;
-      if (surveyOpen && !["documentReceive", "nameCheck", "login", "paymentWorkStart"].includes(row.stage)) {
-        await api(WHO.siteSurvey, "POST", `/api/cases/${id}/submit`, { step: "siteSurvey", data: payload("siteSurvey", ctx) });
+      if (surveyOpen && !["documentReceive", "nameCheck", "login", "nameCorrection", "ownerChange", "agreementUpload", "paymentWorkStart"].includes(row.stage)) {
+        await api("admin", "POST", `/api/cases/${id}/submit`, { step: "siteSurvey", data: payload("siteSurvey", ctx) });
         row = await api("admin", "GET", `/api/cases`).then((all) => all.find((c) => c.id === id));
       }
       const step = row.stage;

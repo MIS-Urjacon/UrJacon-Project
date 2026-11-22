@@ -14,6 +14,7 @@ import IssueReportForm from "@/components/steps/IssueReportForm";
 import { BulkAssign, RowBox, SelectAllBox, useCanAssign, useSelection } from "@/components/BulkAssign";
 import AssigneeCell from "@/components/AssigneeCell";
 import { STAGE_LABEL } from "@/lib/workflow";
+import { STEP_PAGE } from "@/lib/access";
 
 const PAGE_SIZE = 10;
 
@@ -35,6 +36,7 @@ export default function StepPage({
   modalWidth,
   modalBodyClass,
   isPending, // optional: which cases are pending here (default: the case is at this stage)
+  extraTab, // optional: one more tab { key, label, Component } shown after History (Component gets { rows })
 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,8 @@ export default function StepPage({
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const cur = Math.min(page, pages);
   const shown = list.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
-  const canBulk = useCanAssign();
+  const assignmentPage = STEP_PAGE[stepKey];
+  const canBulk = useCanAssign(assignmentPage);
   // Report Issue exists on every step after Document Verification; ticking rows offers it (and Assign).
   const hasReport = stepKey !== "nameCheck" && stepKey !== "documentReceive";
   const showBoxes = canBulk || hasReport;
@@ -145,6 +148,7 @@ export default function StepPage({
   const tabs = [
     ["pending", "Pending", pending.length],
     ["history", "History", history.length],
+    ...(extraTab ? [[extraTab.key, extraTab.label, null]] : []),
   ];
 
   return (
@@ -172,17 +176,23 @@ export default function StepPage({
               }`}
             >
               {label}
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${
-                  tab === k ? "bg-brand-50 text-brand-dark" : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {count}
-              </span>
+              {count !== null && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    tab === k ? "bg-brand-50 text-brand-dark" : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
+        {extraTab && tab === extraTab.key ? (
+          <extraTab.Component rows={rows} />
+        ) : (
+          <>
         <div className="flex items-center justify-between gap-4 px-6 py-4">
           <div className="flex h-10 w-full max-w-sm items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand focus-within:shadow-[0_0_0_3px_rgba(47,168,154,0.18)]">
             <Search size={16} />
@@ -210,7 +220,7 @@ export default function StepPage({
                 Report Issue{sel.selected.length > 1 ? ` (${sel.selected.length})` : ""}
               </button>
             )}
-            {canBulk && <BulkAssign type="case" sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}
+            {canBulk && <BulkAssign type="case" page={assignmentPage} sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}
           </div>
         </div>
 
@@ -287,7 +297,7 @@ export default function StepPage({
                           </td>
                         ))}
                       <td className={td}>
-                        <AssigneeCell row={stepKey === "siteSurvey" && tab === "pending" && r.stage !== "siteSurvey" && r.surveyAssigneesLabel != null ? { ...r, assigneesLabel: r.surveyAssigneesLabel, assigneesAuto: true, assigneesDefault: r.surveyAssigneesDefault } : r} />
+                        <AssigneeCell row={stepKey === "siteSurvey" && tab === "pending" && r.surveyAssigneesLabel != null ? { ...r, assigneesLabel: r.surveyAssigneesLabel, assigneesAuto: r.surveyAssigneesAuto, assigneesDefault: r.surveyAssigneesDefault, assignedBy: r.surveyAssignedBy, assignedAt: r.surveyAssignedAt } : r} />
                       </td>
                       <td className={td}>
                         <DateCell value={sch?.plannedDate} />
@@ -355,6 +365,8 @@ export default function StepPage({
             </button>
           </div>
         </div>
+          </>
+        )}
       </section>
 
       <Modal

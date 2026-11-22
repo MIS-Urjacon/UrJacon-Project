@@ -12,12 +12,16 @@ export default function BalanceClearanceForm({ row, readOnly, onSubmit, onCancel
   const previous = row.steps?.balanceClearance;
   const totalAmount = Number(row.dealAmount || previous?.totalAmount || previous?.balanceDue || 0);
   const [amountReceived, setAmountReceived] = useState(previous?.amountReceived ?? previous?.balanceRecovered ?? "");
+  const [discount, setDiscount] = useState(previous?.discount ?? "");
   const [clearanceDate, setClearanceDate] = useState(previous?.clearanceDate ?? "");
   const [remark, setRemark] = useState(previous?.remark ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const received = Number(amountReceived || 0);
-  const remaining = Math.max(0, totalAmount - received);
+  // A discount given to the customer lowers what is left to collect.
+  const discountAmount = Math.max(0, Number(discount || 0));
+  const payable = Math.max(0, totalAmount - discountAmount);
+  const remaining = Math.max(0, payable - received);
   const cleared = totalAmount > 0 && remaining === 0;
 
   async function submit(event) {
@@ -25,14 +29,16 @@ export default function BalanceClearanceForm({ row, readOnly, onSubmit, onCancel
     setError("");
     if (!(totalAmount > 0)) return setError("Quotation / deal amount is missing for this case");
     if (amountReceived === "" || received < 0) return setError("Enter the total amount received till now");
-    if (received > totalAmount) return setError("Received amount cannot be more than the total amount to collect");
+    if (discountAmount > totalAmount) return setError("Discount cannot be more than the total amount");
+    if (received > payable) return setError("Received amount cannot be more than the amount to collect after the discount");
     if (cleared && !clearanceDate) return setError("Select the balance clearance date");
     setSaving(true);
     const message = await onSubmit({
       workStatus: cleared ? "Done" : "Not Done",
       totalAmount,
+      discount: discountAmount,
       amountReceived: received,
-      balanceDue: totalAmount,
+      balanceDue: payable,
       balanceRecovered: received,
       remainingBalance: remaining,
       clearanceDate: cleared ? clearanceDate : "",
@@ -47,8 +53,9 @@ export default function BalanceClearanceForm({ row, readOnly, onSubmit, onCancel
     <form onSubmit={submit} className="space-y-6">
       <CaseSummary row={row} />
       <CaseDetails items={importantDetails(row, "balanceClearance")} />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className={`grid gap-3 ${discountAmount > 0 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         <AmountCard label="Total Amount to Collect" value={totalAmount} tone="slate" />
+        {discountAmount > 0 && <AmountCard label="Discount" value={discountAmount} tone="slate" />}
         <AmountCard label="Amount Received" value={received} tone="green" />
         <AmountCard label="Remaining Balance" value={remaining} tone={remaining > 0 ? "red" : "green"} />
       </div>
@@ -60,7 +67,8 @@ export default function BalanceClearanceForm({ row, readOnly, onSubmit, onCancel
 
       <fieldset disabled={readOnly}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block"><Label required>Total Amount Received Till Now (₹)</Label><input className="field" type="number" min={0} max={totalAmount || undefined} required value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)} /></label>
+          <label className="block"><Label>Discount (₹)</Label><input className="field" type="number" min={0} max={totalAmount || undefined} placeholder="Optional" value={discount} onChange={(event) => setDiscount(event.target.value)} /></label>
+          <label className="block"><Label required>Total Amount Received Till Now (₹)</Label><input className="field" type="number" min={0} max={payable || undefined} required value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)} /></label>
           <label className="block"><Label required={cleared}>Balance Clearance Date</Label><input className="field" type="date" required={cleared} disabled={readOnly || !cleared} value={clearanceDate} onChange={(event) => setClearanceDate(event.target.value)} /></label>
           <label className="block sm:col-span-2"><Label>Remark</Label><textarea className="field !h-auto py-2.5" rows={3} value={remark} onChange={(event) => setRemark(event.target.value)} placeholder={cleared ? "Optional closing remark" : "Payment follow-up or pending balance note"} /></label>
         </div>

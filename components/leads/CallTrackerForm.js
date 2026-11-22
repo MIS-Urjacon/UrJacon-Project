@@ -5,15 +5,13 @@ import DropSelect from "@/components/Select";
 import { History, MapPin } from "lucide-react";
 import { Avatar, Pill } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
-import { quotationStageLabel, visitHistory } from "@/lib/leadConstants";
-import QuoteButton from "@/components/steps/QuoteButton";
+import { visitHistory } from "@/lib/leadConstants";
 import DocumentPacket, { validatePacket } from "@/components/leads/DocumentPacket";
 
 const LEAD_TEMPERATURES = ["Interested", "Not Interested", "Follow up Required"];
-const RESPONSES = ["Call back later", "Visit required", "Not interested"];
-// Once the quotation is sent, the customer's answer is recorded here.
-const QUOTED_RESPONSES = ["Call back later", "Visit required", "Document given", "Not interested"];
-const TEMPERATURE_COLOR = { Hot: "red", Warm: "amber", Cold: "blue", Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
+// Document given sends the lead straight to Document Receive; quotations are made separately on the Quotation page.
+const RESPONSES = ["Call back later", "Visit required", "Document given", "Not interested"];
+const TEMPERATURE_COLOR = { Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
 
 export default function CallTrackerForm({ row, onComplete, onCancel }) {
   // A lead waiting for a visit opens with Contact Type = Visit, ready to record how the visit went.
@@ -26,7 +24,6 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
   const [remark, setRemark] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const quoted = row.quotationStatus === "sent";
   const [packet, setPacket] = useState(() => ({ ...row, documents: { ...(row.documents ?? {}) } }));
   const [masters, setMasters] = useState({});
   const setField = (key, value) => setPacket((current) => ({ ...current, [key]: value }));
@@ -36,8 +33,8 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
   }, []);
 
   useEffect(() => {
-    if (quoted) fetch("/api/masters").then((r) => r.ok ? r.json() : {}).then(setMasters).catch(() => {});
-  }, [quoted]);
+    fetch("/api/masters").then((r) => r.ok ? r.json() : {}).then(setMasters).catch(() => {});
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -56,7 +53,8 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
       ...row, ...(givesDocuments ? packet : {}), action, lostReason: action === "lost" ? remark : "",
       leadStage: givesDocuments ? "documentsReady" : "contacted",
       nextFollowUp: response === "Call back later" || response === "Visit required" ? nextFollowUp : "",
-      temperature, outcome: response,
+      // Not asked when the documents are given: the lead keeps its last temperature.
+      temperature: givesDocuments ? (temperature || row.temperature || "") : temperature, outcome: response,
       visitBy: response === "Visit required" ? visitBy : "",
       followUp: { type: contactType, outcome: response, remark, ...(response === "Visit required" ? { visitBy } : {}) },
     };
@@ -87,8 +85,6 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {row.temperature && <Pill color={TEMPERATURE_COLOR[row.temperature]}>{row.temperature}</Pill>}
-            <Pill color="blue">{quotationStageLabel(row)}</Pill>
-            {quoted && <QuoteButton compact row={row} title={Number(row.quotationRevision) > 0 ? `Latest Quotation (R${row.quotationRevision})` : "Quotation sent"} />}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-slate-100 px-5 py-3 text-sm">
@@ -149,8 +145,8 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
         <p className="mb-5 text-sm text-slate-500">Select how the customer was contacted and record the final response from this interaction.</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Select label="Contact Type" value={contactType} options={["Call", "Visit", "WhatsApp"]} onChange={setContactType} />
-          <Select label="Customer Response" required value={response} options={quoted ? QUOTED_RESPONSES : RESPONSES} onChange={setResponse} />
-          <Select label="Lead Temperature" required value={temperature} options={LEAD_TEMPERATURES} onChange={setTemperature} />
+          <Select label="Customer Response" required value={response} options={RESPONSES} onChange={setResponse} />
+          {response !== "Document given" && <Select label="Lead Temperature" required value={temperature} options={LEAD_TEMPERATURES} onChange={setTemperature} />}
           {response === "Visit required" && <Select label="Visit By (who is going)" required value={visitBy} options={staff.map((person) => person.name)} onChange={setVisitBy} />}
           {(response === "Call back later" || response === "Visit required") && <Field label={response === "Visit required" ? "Visit Date & Time" : "Next Call Date & Time"} required type="datetime-local" value={nextFollowUp} onChange={setNextFollowUp} />}
           <TextArea className={response === "Call back later" || response === "Visit required" ? "sm:col-span-1 lg:col-span-2" : "sm:col-span-2 lg:col-span-3"} label={response === "Not interested" ? "Lost Reason" : "Conversation Remark"} required={response === "Not interested"} value={remark} onChange={setRemark} />

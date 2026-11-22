@@ -34,9 +34,9 @@ function QuotationFile({ file }) {
 export default function QuotationPage() {
   // Pending = leads a quotation can be made for: open, with a BP SC Number, no sent quotation yet (a
   // draft or a started revision stays here too).
-  const filter = useCallback((row) => row.quotationStatus !== "sent" && (row.leadStage === "quotation" || (["new", "contacted"].includes(row.leadStage) && Boolean(row.bpScNumber))), []);
+  const filter = useCallback((row) => row.status === "open" && row.quotationStatus !== "sent" && Boolean(row.bpScNumber), []);
   const historyFilter = useCallback((row) => Boolean(row.quotationStatus && row.quotationCreatedAt), []);
   // An open lead whose quotation is sent can be revised (History > Revise opens it in Pending).
-  const canRevise = useCallback((row) => row.status === "open" && row.quotationStatus === "sent" && ["quotation", "contacted"].includes(row.leadStage), []);
-  return <LeadPipelinePage title="Quotation & Documents" subtitle="Step 3 · Choose a BP SC Number to fill the quotation with that lead's details, then save and send it. To correct a sent one, use Revise in History. After sending, the lead is in Call Tracker for the customer's answer." filter={filter} historyFilter={historyFilter} historyColumns={HISTORY_COLUMNS} Form={QuotationForm} PendingView={QuotationWorkspace} canRevise={canRevise} modalTitle="Create, send and track quotation" />;
+  const canRevise = useCallback((row) => row.status === "open" && row.quotationStatus === "sent", []);
+  return <LeadPipelinePage title="Quotation & Documents" subtitle="Step 3 · Choose a BP SC Number to fill the quotation with that lead's details, then Submit to send it to the customer. To correct a sent one, use Revise in History. A quotation is separate from Call Tracker: it does not move the lead, and the price of the case is set at Document Receive." filter={filter} historyFilter={historyFilter} historyColumns={HISTORY_COLUMNS} Form={QuotationForm} PendingView={QuotationWorkspace} canRevise={canRevise} modalTitle="Create, send and track quotation" />;
 }

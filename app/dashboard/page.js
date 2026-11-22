@@ -17,12 +17,12 @@ import {
   Wrench,
 } from "lucide-react";
 import { DateCell, Pill } from "@/components/ui";
-import { CASH_FLOW, CLOSURE_FLOW, FLOW, INSTALL_FLOW, LOAN_FLOW, STAGE_LABEL, TAT_DAYS } from "@/lib/workflow";
+import { CASH_FLOW, CLOSURE_FLOW, FLOW, agreementFirst, INSTALL_FLOW, LOAN_FLOW, STAGE_LABEL, TAT_DAYS } from "@/lib/workflow";
 import { leadStageLabel } from "@/lib/leadConstants";
 import { STEPS } from "@/lib/steps";
 
 const GROUPS = [
-  { key: "process", label: "Core process", hint: "Documents → PMSG → survey → payment", stages: [...FLOW, "documentReceive"], icon: FolderKanban, color: "bg-sky-500" },
+  { key: "process", label: "Core process", hint: "Documents → PMSG → survey → payment", stages: [...FLOW, "documentReceive", "nameCorrection", "ownerChange"], icon: FolderKanban, color: "bg-sky-500" },
   { key: "loan", label: "Loan process", hint: "Bank file to dispatch", stages: LOAN_FLOW, icon: Landmark, color: "bg-indigo-500" },
   { key: "cash", label: "Cash process", hint: "Payment collection and approval", stages: CASH_FLOW.filter((stage) => stage !== "cashReceipt"), icon: BadgeIndianRupee, color: "bg-amber-500" },
   { key: "payment", label: "Payment gate", hint: "Cheque documents and signed receipt", stages: ["subsidyChequeReady", "cashReceipt"], icon: BadgeIndianRupee, color: "bg-orange-500" },
@@ -115,7 +115,7 @@ export default function DashboardPage() {
       {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard loading={loading} icon={UsersRound} label="Open Leads" value={dashboard.openLeads.length} sub={`${dashboard.hotLeads.length} hot · ${dashboard.dueLeads.length} follow-ups due`} accent="brand" href="/leads" />
+        <MetricCard loading={loading} icon={UsersRound} label="Open Leads" value={dashboard.openLeads.length} sub={`${dashboard.interestedLeads.length} interested · ${dashboard.dueLeads.length} follow-ups due`} accent="brand" href="/leads" />
         <MetricCard loading={loading} icon={FolderKanban} label="Active Cases" value={dashboard.activeCases.length} sub={`${dashboard.activeLoanCases.length} loan · ${dashboard.activeCashCases.length} cash`} accent="blue" href="/name-check" />
         <MetricCard loading={loading} icon={TriangleAlert} label="Needs Attention" value={dashboard.attentionCount} sub={`${dashboard.holdCases.length} on hold · ${dashboard.overdueCases.length} overdue`} accent="rose" href="#priority-queue" />
         <MetricCard loading={loading} icon={CheckCircle2} label="Completed" value={dashboard.completedCases.length} sub={`${dashboard.conversionRate}% lead conversion`} accent="green" />
@@ -162,11 +162,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-[0.9fr_0.9fr_1.2fr]">
-        <BreakdownCard title="Lead health" subtitle="Open lead priority mix">
+        <BreakdownCard title="Lead health" subtitle="Open lead status mix">
           <DonutSummary total={dashboard.openLeads.length} centerLabel="open" segments={[
-            { label: "Hot", value: dashboard.temperatureCounts.Hot, color: "#f43f5e" },
-            { label: "Warm", value: dashboard.temperatureCounts.Warm, color: "#f59e0b" },
-            { label: "Cold", value: dashboard.temperatureCounts.Cold, color: "#38bdf8" },
+            { label: "Interested", value: dashboard.temperatureCounts.Interested, color: "#10b981" },
+            { label: "Follow up Required", value: dashboard.temperatureCounts["Follow up Required"], color: "#f59e0b" },
+            { label: "Not Interested", value: dashboard.temperatureCounts["Not Interested"], color: "#f43f5e" },
           ]} />
         </BreakdownCard>
         <BreakdownCard title="Payment mode" subtitle="Cases after payment decision">
@@ -239,7 +239,7 @@ function summarize(leads, cases, asOf) {
   const activeCases = cases.filter((row) => row.stage !== "done");
   const completedCases = cases.filter((row) => row.stage === "done");
   const dueLeads = openLeads.filter((lead) => lead.nextFollowUp && new Date(lead.nextFollowUp).getTime() <= now);
-  const hotLeads = openLeads.filter((lead) => lead.temperature === "Hot");
+  const interestedLeads = openLeads.filter((lead) => lead.temperature === "Interested");
   const holdCases = activeCases.filter((row) => row.steps?.[row.stage]?.status === "hold");
   const overdueCases = activeCases.filter((row) => {
     const planned = row.schedule?.[row.stage]?.plannedDate;
@@ -250,7 +250,7 @@ function summarize(leads, cases, asOf) {
   const cashCases = cases.filter((row) => paymentMode(row) === "Cash");
   const activeLoanCases = activeCases.filter((row) => paymentMode(row) === "Loan");
   const activeCashCases = activeCases.filter((row) => paymentMode(row) === "Cash");
-  const groupCounts = Object.fromEntries(GROUPS.map((group) => [group.key, activeCases.filter((row) => group.stages.includes(row.stage)).length]));
+  const groupCounts = Object.fromEntries(GROUPS.map((group) => [group.key, activeCases.filter((row) => (row.stage === "agreementUpload" && agreementFirst(row) ? group.key === "process" : group.stages.includes(row.stage))).length]));
   // A sent quotation returns the lead to Call Tracker, so "Quotation sent" counts by quotation status;
   // leads still awaiting or revising a quotation stay under "Contacted".
   const quotationSent = (lead) => lead.quotationStatus === "sent" && ["contacted", "quotation"].includes(lead.leadStage);
@@ -260,7 +260,7 @@ function summarize(leads, cases, asOf) {
     quotation: openLeads.filter(quotationSent).length,
     documentsReady: openLeads.filter((lead) => lead.leadStage === "documentsReady").length,
   };
-  const temperatureCounts = Object.fromEntries(["Hot", "Warm", "Cold"].map((temperature) => [temperature, openLeads.filter((lead) => lead.temperature === temperature).length]));
+  const temperatureCounts = Object.fromEntries(["Interested", "Follow up Required", "Not Interested"].map((temperature) => [temperature, openLeads.filter((lead) => lead.temperature === temperature).length]));
 
   // A reported issue sits at Document Verification; it is listed once, as an issue.
   const hasOpenIssue = (row) => Boolean(row.issue?.open);
@@ -277,7 +277,7 @@ function summarize(leads, cases, asOf) {
   const conversionRate = leads.length ? Math.round((convertedLeads.length / leads.length) * 100) : 0;
   const totalLiveWork = openLeads.length + activeCases.length;
 
-  return { openLeads, convertedLeads, activeCases, completedCases, dueLeads, hotLeads, holdCases, overdueCases, loanCases, cashCases, activeLoanCases, activeCashCases, groupCounts, leadStageCounts, temperatureCounts, priorities, recentActivity, conversionRate, totalLiveWork, attentionCount: priorities.length };
+  return { openLeads, convertedLeads, activeCases, completedCases, dueLeads, interestedLeads, holdCases, overdueCases, loanCases, cashCases, activeLoanCases, activeCashCases, groupCounts, leadStageCounts, temperatureCounts, priorities, recentActivity, conversionRate, totalLiveWork, attentionCount: priorities.length };
 }
 
 function MetricCard({ loading, icon: Icon, label, value, sub, accent, href }) {

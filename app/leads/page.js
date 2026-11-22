@@ -10,7 +10,7 @@ import { Avatar, Button, DateCell, Pill, Toast } from "@/components/ui";
 import { leadStageLabel } from "@/lib/leadConstants";
 
 const TABS = [["open", "Open"], ["converted", "Converted"], ["lost", "Lost"]];
-const TEMPERATURE_COLOR = { Hot: "red", Warm: "amber", Cold: "blue", Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
+const TEMPERATURE_COLOR = { Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
 const PAGE_SIZE = 10;
 
 export default function LeadsPage() {
@@ -63,7 +63,7 @@ export default function LeadsPage() {
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const canBulk = useCanAssign();
+  const canBulk = useCanAssign("leads");
   const sel = useSelection(tab === "open" ? shown : []);
 
   function notify(message) {
@@ -132,7 +132,7 @@ export default function LeadsPage() {
             <Search size={16} />
             <input className="w-full bg-transparent text-sm text-slate-700 outline-none" placeholder="Search name, mobile, village, lead ID..." value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
           </div>
-          <div className="flex items-center gap-4"><div className="text-sm text-slate-400">{filtered.length} {filtered.length === 1 ? "lead" : "leads"}</div>{canBulk && <BulkAssign type="lead" sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}</div>
+          <div className="flex items-center gap-4"><div className="text-sm text-slate-400">{filtered.length} {filtered.length === 1 ? "lead" : "leads"}</div>{canBulk && <BulkAssign type="lead" page="leads" sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}</div>
         </div>
 
         <div className="overflow-x-auto border-t border-slate-100">

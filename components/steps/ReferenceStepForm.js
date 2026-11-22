@@ -5,6 +5,7 @@ import DropSelect from "@/components/Select";
 import FileUpload from "@/components/FileUpload";
 import CaseDetails from "@/components/steps/CaseDetails";
 import { importantDetails } from "@/lib/caseDetails";
+import { materialDefault, materialItems } from "@/lib/materials";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 import { HOLD_REASONS, PROCESS_CONFIG, RECEIPT_STATUS } from "@/lib/processConfig";
@@ -77,6 +78,10 @@ export default function ReferenceStepForm({ stepKey, row, readOnly, onSubmit, on
               <FileUpload files={form[item.key]} onChange={(files) => set(item.key, files)} max={item.max ?? 5} readOnly={readOnly || hold} />
               {item.autoFrom && form[item.key]?.length > 0 && <AutoHint>{item.autoFrom}</AutoHint>}
             </div>
+          ) : item.type === "materials" ? (
+            <div key={item.key} className="sm:col-span-2">
+              <MaterialEditor value={form[item.key]} onChange={(text) => set(item.key, text)} readOnly={readOnly || hold} />
+            </div>
           ) : item.type === "select" ? (
             <Select key={item.key} label={item.label} required={item.required && !optionalFields} value={form[item.key]} options={item.options} onChange={(value) => set(item.key, value)} hint={form[item.key] ? item.autoFrom : ""} />
           ) : (
@@ -104,12 +109,50 @@ function initialFieldValue(row, previous, item) {
     const value = row.steps?.[item.defaultStep]?.[item.defaultKey];
     if (hasValue(value)) return value;
   }
+  if (item.defaultCalculation === "materialList") return materialDefault(row);
   if (item.defaultRow && hasValue(row[item.defaultRow])) return row[item.defaultRow];
   if (item.defaultByState && hasValue(item.defaultByState[row.state])) return item.defaultByState[row.state];
   if (item.defaultCalculation === "priceMinusSubsidy") {
     return Math.max(0, Number(row.dealAmount || 0) - Number(row.quotationSubsidy || 0)) || "";
   }
   return item.type === "files" ? [] : "";
+}
+
+// The material list of a dispatch in one place: item and quantity per row, filled from the system and the
+// survey report. Quantities (and items) can be corrected; it is saved as "Item — qty" lines.
+const parseMaterials = (text) =>
+  String(text ?? "").split("\n").filter((line) => line.trim()).map((line) => {
+    const at = line.lastIndexOf(" — ");
+    return at > 0 ? { item: line.slice(0, at), qty: line.slice(at + 3) } : { item: line, qty: "" };
+  });
+const joinMaterials = (rows) => rows.filter((row) => row.item.trim()).map((row) => (row.qty.trim() ? `${row.item.trim()} — ${row.qty.trim()}` : row.item.trim())).join("\n");
+
+function MaterialEditor({ value, onChange, readOnly }) {
+  const rows = parseMaterials(value);
+  const update = (index, patch) => onChange(joinMaterials(rows.map((row, i) => (i === index ? { ...row, ...patch } : row))));
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200">
+      <div className="flex items-center justify-between bg-slate-50 px-4 py-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Material list <span className="text-rose-500">*</span></div>
+        <div className="text-[11px] text-slate-400">From the survey report. Change a quantity if needed.</div>
+      </div>
+      {/* Two items per row (item + its own quantity); a long note takes the whole row. */}
+      <div className="grid grid-cols-2 gap-x-px bg-slate-100">
+        {rows.map((row, index) => (
+          <div key={index} className={`flex items-center gap-2 border-t border-slate-100 bg-white px-3 py-1 ${row.item.length > 38 ? "col-span-2" : ""}`}>
+            <input className="min-w-0 flex-1 bg-transparent py-1 text-[13px] text-slate-700 outline-none" disabled={readOnly} value={row.item} onChange={(event) => update(index, { item: event.target.value })} />
+            <input className="w-20 shrink-0 rounded-md border border-slate-200 px-2 py-1 text-right text-[13px] font-semibold text-slate-800 outline-none focus:border-brand" disabled={readOnly} value={row.qty} onChange={(event) => update(index, { qty: event.target.value })} />
+            {!readOnly && <button type="button" aria-label="Remove item" onClick={() => onChange(joinMaterials(rows.filter((_, i) => i !== index)))} className="text-slate-300 hover:text-rose-500">×</button>}
+          </div>
+        ))}
+      </div>
+      {!readOnly && (
+        <button type="button" onClick={() => onChange(`${joinMaterials(rows)}${rows.length ? "\n" : ""}New item — `)} className="w-full border-t border-slate-100 px-4 py-1.5 text-left text-xs font-semibold text-brand-dark hover:bg-slate-50">
+          + Add item
+        </button>
+      )}
+    </section>
+  );
 }
 
 function hasValue(value) {

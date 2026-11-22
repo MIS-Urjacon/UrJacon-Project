@@ -1,6 +1,8 @@
 "use client";
 
+import { useRef } from "react";
 import { FileText, Printer } from "lucide-react";
+import ProposalFrame from "@/components/leads/ProposalFrame";
 import { Pill } from "@/components/ui";
 import { quotationNumber } from "@/lib/quotation";
 import { QDOC_CSS, QDOC_PAGE_CSS, quotationDocument } from "@/lib/quotationFormat";
@@ -45,6 +47,7 @@ function normalize(quotation) {
     createdAt: quotation.createdAt,
     sentAt: quotation.sentAt,
     sentBy: quotation.sentBy,
+    proposal: quotation.proposal,
   } : {
     number: quotationNumber(quotation),
     revision: quotation.quotationRevision || 0,
@@ -83,15 +86,19 @@ function normalize(quotation) {
     createdAt: quotation.quotationCreatedAt,
     sentAt: quotation.quotationSentAt,
     sentBy: quotation.quotationSentBy,
+    proposal: quotation.quotationProposal,
   };
 }
 
 export default function QuotationSummary({ quotation, title = "Generated Quotation", printable = true }) {
+  const proposalFrame = useRef(null);
   if (!quotation?.quotationReference && !quotation?.reference && !quotation?.number) return null;
   const quote = normalize(quotation);
   const status = quote.status === "sent" || quote.sentAt ? "Sent" : "Draft";
+  const hasProposal = Boolean(quote.proposal?.state);
 
   function printQuotation(event) {
+    if (hasProposal) return proposalFrame.current?.print();
     const documentNode = event.currentTarget.closest("section")?.querySelector("[data-quotation-document]");
     if (!documentNode) return;
     const popup = window.open("", "_blank", "width=900,height=900");
@@ -108,10 +115,16 @@ export default function QuotationSummary({ quotation, title = "Generated Quotati
         <div className="flex items-center gap-2"><Pill color={status === "Sent" ? "green" : "amber"}>{status}</Pill>{printable && <button type="button" onClick={printQuotation} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:border-brand hover:text-brand-dark"><Printer size={14} />Print / Save PDF</button>}</div>
       </div>
 
-      <style>{QDOC_CSS}</style>
-      <div data-quotation-document className="bg-[#EFEEE8] p-3 sm:p-5">
-        <QuotationDocument q={quotationDocument(quote)} />
-      </div>
+      {hasProposal ? (
+        <ProposalFrame ref={proposalFrame} proposal={quote.proposal} height={680} />
+      ) : (
+        <>
+          <style>{QDOC_CSS}</style>
+          <div data-quotation-document className="bg-[#EFEEE8] p-3 sm:p-5">
+            <QuotationDocument q={quotationDocument(quote)} />
+          </div>
+        </>
+      )}
 
       {quote.files?.length > 0 && <div className="no-print border-t border-slate-200 bg-slate-50 px-5 py-4"><div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Supporting images / documents</div><div className="flex flex-wrap gap-2">{quote.files.map((file) => <a key={file.url} href={file.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-brand-dark hover:border-brand"><FileText size={15} />{file.name || "View attachment"}</a>)}</div></div>}
     </section>

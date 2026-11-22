@@ -1,35 +1,36 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import DropSelect from "@/components/Select";
 import { CaseSummary } from "@/components/ui";
+import FileUpload from "@/components/FileUpload";
 import { FormActions, Label } from "./shared";
+import { SURVEY_CHOICES, SURVEY_MATERIALS, SURVEY_NUMBERS, SURVEY_PHOTOS } from "@/lib/surveyFields";
 import { MapPin } from "lucide-react";
 import { defaultInverter, defaultPanelCount, DEFAULT_PANEL_WP } from "@/lib/quotationFormat";
 
 export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
   const prev = row.steps?.siteSurvey;
   const [f, setF] = useState({
-    customerName: prev?.customerName ?? row.customerName ?? "",
-    contactNumber: prev?.contactNumber ?? row.mobile ?? "",
-    village: prev?.village ?? row.village ?? "",
-    surveyDate: prev?.surveyDate ?? "",
-    surveyorName: prev?.surveyorName ?? "",
     smartMeterPresent: prev?.smartMeterPresent ?? "",
-    materialNeeded: prev?.materialNeeded ?? "",
+    ...Object.fromEntries(SURVEY_CHOICES.map((q) => [q.key, prev?.[q.key] ?? ""])),
+    ...Object.fromEntries(SURVEY_NUMBERS.map((q) => [q.key, prev?.[q.key] ?? ""])),
+    materialsAvailable: prev?.materialsAvailable ?? [],
+    obstacles: prev?.obstacles ?? "",
+    installationDate: prev?.installationDate ?? "",
+    photosTaken: prev?.photosTaken ?? [],
+    photoPdf: prev?.photoPdf ?? [],
+    surveyorRemarks: prev?.surveyorRemarks ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
-  const [staff, setStaff] = useState([]); // employees for the Surveyor dropdown
-  useEffect(() => {
-    fetch("/api/staff").then((r) => (r.ok ? r.json() : [])).then((list) => setStaff(list.map((person) => person.name))).catch(() => {});
-  }, []);
-  const surveyors = f.surveyorName && !staff.includes(f.surveyorName) ? [...staff, f.surveyorName] : staff;
-  const today = new Date().toISOString().slice(0, 10);
   const set = (k, v) => setF({ ...f, [k]: v });
 
   async function submit(e) {
     e.preventDefault();
     setErr("");
+    const unanswered = SURVEY_CHOICES.find((q) => q.required && !f[q.key]);
+    if (unanswered) return setErr(`Select ${unanswered.label}`);
+    if (f.photoPdf.length === 0) return setErr("Upload the survey photo PDF");
     setSaving(true);
     const msg = await onSubmit(f);
     setSaving(false);
@@ -41,77 +42,85 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
       <CaseSummary row={row} />
       <ImportantDetails row={row} />
 
-      <fieldset>
-        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Customer details
-        </legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <Label required>Customer Name</Label>
-            <input
-              className="field"
-              required
-              disabled={readOnly}
-              placeholder="Customer Name"
-              value={f.customerName}
-              onChange={(e) => set("customerName", e.target.value)}
-            />
-          </label>
-          <label className="block"><Label required>Smart Meter Present?</Label><DropSelect className="field" required disabled={readOnly} value={f.smartMeterPresent} onChange={(e) => set("smartMeterPresent", e.target.value)}><option value="">Select</option><option>Yes</option><option>No</option></DropSelect></label>
-          <label className="block sm:col-span-2"><Label required>Material Needed / Survey Report</Label><textarea rows={3} className="field !h-auto py-2.5" required disabled={readOnly} value={f.materialNeeded} onChange={(e) => set("materialNeeded", e.target.value)} /></label>
-          <label className="block">
-            <Label required>Contact Number</Label>
-            <input
-              className="field"
-              required
-              disabled={readOnly}
-              inputMode="numeric"
-              maxLength={10}
-              pattern="\d{10}"
-              title="10 digit mobile number"
-              placeholder="10 digit mobile number"
-              value={f.contactNumber}
-              onChange={(e) => set("contactNumber", e.target.value.replace(/\D/g, ""))}
-            />
-          </label>
-          <label className="block sm:col-span-2">
-            <Label required>Village (address)</Label>
-            <input
-              className="field"
-              required
-              disabled={readOnly}
-              placeholder="Village / address"
-              value={f.village}
-              onChange={(e) => set("village", e.target.value)}
-            />
-          </label>
-        </div>
+      <p className="rounded-lg bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
+        The survey date and the surveyor (you, from your login) are saved automatically when you submit.
+      </p>
+
+      <fieldset disabled={readOnly}>
+        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Smart meter</legend>
+        <label className="block sm:max-w-xs">
+          <Label required>Smart Meter Present?</Label>
+          <DropSelect className="field" required value={f.smartMeterPresent} onChange={(e) => set("smartMeterPresent", e.target.value)}>
+            <option value="">Select</option>
+            <option>Yes</option>
+            <option>No</option>
+          </DropSelect>
+        </label>
       </fieldset>
 
-      <fieldset>
-        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Survey details
-        </legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <Label required>Survey Date</Label>
-            <input
-              type="date"
-              className="field"
-              required
-              max={today}
-              disabled={readOnly}
-              value={f.surveyDate}
-              onChange={(e) => set("surveyDate", e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <Label required>Surveyor Name</Label>
-            <DropSelect className="field" required disabled={readOnly} value={f.surveyorName} onChange={(e) => set("surveyorName", e.target.value)}>
-              <option value="">Select surveyor</option>
-              {surveyors.map((name) => <option key={name}>{name}</option>)}
-            </DropSelect>
-          </label>
+      {["Electrical system", "Roof technical evaluation", "Cable distances", "Site logistics & access"].map((section) => (
+        <fieldset key={section} disabled={readOnly}>
+          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{section}</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {SURVEY_CHOICES.filter((q) => q.section === section).map((q) => (
+              <div key={q.key}>
+                <Label required={q.required}>{q.label}</Label>
+                <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                  {q.options.map((option) => (
+                    <label key={option} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="radio" name={q.key} className="h-4 w-4 accent-[var(--color-brand)]" checked={f[q.key] === option} onChange={() => set(q.key, option)} />
+                      {option}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {SURVEY_NUMBERS.filter((q) => q.section === section).map((q) => (
+              <label key={q.key} className="block">
+                <Label required={q.required}>{q.label}</Label>
+                <input className="field" type="number" min={0} step="any" required={q.required} value={f[q.key]} onChange={(e) => set(q.key, e.target.value)} />
+                {q.hint && <p className="mt-1 text-xs text-slate-400">{q.hint}</p>}
+              </label>
+            ))}
+            {section === "Roof technical evaluation" && (
+              <div>
+                <Label>Cement, Gitti, Balu Available?</Label>
+                <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                  {SURVEY_MATERIALS.map((item) => (
+                    <label key={item} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-[var(--color-brand)]" checked={f.materialsAvailable.includes(item)} onChange={(e) => set("materialsAvailable", e.target.checked ? [...f.materialsAvailable, item] : f.materialsAvailable.filter((x) => x !== item))} />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {section === "Site logistics & access" && (<>
+              <label className="block"><Label>Potential Installation Obstacles</Label><input className="field" value={f.obstacles} onChange={(e) => set("obstacles", e.target.value)} /></label>
+              <label className="block"><Label>Tentative Installation Date</Label><input type="date" className="field" value={f.installationDate} onChange={(e) => set("installationDate", e.target.value)} /></label>
+            </>)}
+          </div>
+        </fieldset>
+      ))}
+
+      <fieldset disabled={readOnly}>
+        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Photo checklist &amp; remarks</legend>
+        <p className="mb-3 text-sm text-slate-500">Take clear photos of each item during the survey and make one PDF of them. Tick each photo that was taken, then upload the PDF and share it with Manoj Bhoi or Sameer.</p>
+        <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+          {SURVEY_PHOTOS.map((item) => (
+            <label key={item} className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-[var(--color-brand)]" checked={f.photosTaken.includes(item)} onChange={(e) => set("photosTaken", e.target.checked ? [...f.photosTaken, item] : f.photosTaken.filter((x) => x !== item))} />
+              {item}
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label required>Survey Photo PDF</Label>
+            <FileUpload files={f.photoPdf} onChange={(files) => set("photoPdf", files)} max={1} readOnly={readOnly} compact />
+            <p className="mt-1 text-xs text-slate-400">1 PDF file, up to 5 MB.</p>
+          </div>
+          <label className="block sm:col-span-2"><Label required>Surveyor Remarks</Label><textarea rows={3} className="field !h-auto py-2.5" required value={f.surveyorRemarks} onChange={(e) => set("surveyorRemarks", e.target.value)} /></label>
         </div>
       </fieldset>
 
@@ -125,8 +134,6 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
     </form>
   );
 }
-
-const money = (value) => (Number(value) > 0 ? `₹${Number(value).toLocaleString("en-IN")}` : "");
 
 // Only what the surveyor needs from earlier steps; empty items are left out.
 function ImportantDetails({ row }) {
@@ -143,7 +150,6 @@ function ImportantDetails({ row }) {
     ["Panels", panels ? `${panels} × ${wp} Wp${row.quotationPanelBrand ? ` ${row.quotationPanelBrand}` : ""}` : ""],
     ["Inverter", row.quotationInverter || defaultInverter(kw, row.quotationGridType)],
     ["Payment Mode", row.steps?.paymentWorkStart?.cashOrLoan || row.steps?.documentReceive?.paymentMode || row.preferredPaymentMode],
-    ["System Price", money(row.dealAmount)],
     ["PMSG Application No.", login?.applicationNo],
     ["Quotation", row.quotationReference],
   ].filter(([, value]) => value);

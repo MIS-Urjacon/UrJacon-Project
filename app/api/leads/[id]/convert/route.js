@@ -16,23 +16,15 @@ export async function POST(_request, { params }) {
     return NextResponse.json({ error: "This lead is already converted" }, { status: 409 });
   }
   if (lead.leadStage !== "documentsReady") {
-    return NextResponse.json({ error: "Complete the quotation and document packet before Name Check" }, { status: 400 });
-  }
-  if (!lead.quotationReference) {
-    return NextResponse.json({ error: "Quotation Reference is required before Name Check" }, { status: 400 });
-  }
-  if (lead.quotationStatus !== "sent") {
-    return NextResponse.json({ error: "Send the quotation before moving to Document Verification" }, { status: 400 });
+    return NextResponse.json({ error: "Complete the handover packet before Document Receive" }, { status: 400 });
   }
   if (!lead.bpScNumber) {
     return NextResponse.json({ error: "BP SC Number is required before confirmation" }, { status: 400 });
   }
   // The handover documents (Aadhaar, PAN, Passbook, Bill, Terrace Geotag) are optional here; Document Receive collects them.
-  if (!lead.paymentMode) {
-    return NextResponse.json({ error: "Select a payment mode before confirmation" }, { status: 400 });
-  }
-  if (!lead.state || !lead.email || !lead.productCode || !(Number(lead.kwWanted) > 0)) {
-    return NextResponse.json({ error: "State, Email, Product Code and System kW are required in the handover packet" }, { status: 400 });
+  // The payment mode is chosen at Document Receive, so it is not required here.
+  if (!lead.state || !lead.email) {
+    return NextResponse.json({ error: "State and Email are required in the handover packet" }, { status: 400 });
   }
   if (lead.source === "Agent" && !(Number(lead.commission) > 0)) {
     return NextResponse.json({ error: "Agent Commission is required for an agent case" }, { status: 400 });
@@ -56,3 +48,5 @@ export async function POST(_request, { params }) {
   await saveLead(lead);
   return NextResponse.json({ lead, case: result.record }, { status: 201 });
 }
+
+// payment mode is chosen at Document Receive

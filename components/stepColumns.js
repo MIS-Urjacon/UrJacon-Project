@@ -86,6 +86,9 @@ function Names({ row }) {
   );
 }
 
+// Bank details live on Bank File Ready; cases from before the change kept them on File Submission in Bank.
+const bankStep = (r) => (r.steps?.bankFileReady?.bank ? r.steps.bankFileReady : r.steps?.fileSubmission);
+
 const remarkCol = (key, label = "Remark") => ({
   label,
   cell: (r) => {
@@ -112,6 +115,14 @@ export const C = {
   loginRemark: {
     label: "Login Remark / Images",
     cell: (r) => (step(r, "login") ? <RemarkImages remark={step(r, "login").remark} images={step(r, "login").images} /> : dash),
+  },
+  // PMSG Application No. entered at Login (Login History)
+  pmsgNumber: {
+    label: "PMSG Application No.",
+    cell: (r) => {
+      const n = step(r, "login")?.applicationNo;
+      return n ? <span className="font-mono text-[13px] font-medium text-slate-700">{n}</span> : dash;
+    },
   },
   // Login Check result + remark + images in one column (used in Login History)
   loginDetail: {
@@ -219,26 +230,34 @@ export const C = {
       );
     },
   },
-  // Loan steps
+  // Loan steps (the bank details are filled at Bank File Ready; older cases kept them on File Submission)
   bankInfo: {
     label: "Bank / Branch",
-    cell: (r) => (step(r, "fileSubmission") ? <Stack top={step(r, "fileSubmission").bank} bottom={step(r, "fileSubmission").bankBranch} /> : dash),
+    cell: (r) => (bankStep(r)?.bank ? <Stack top={bankStep(r).bank} bottom={bankStep(r).bankBranch} /> : dash),
+  },
+  submittedFile: {
+    label: "Submitted File",
+    cell: (r) => {
+      const files = step(r, "fileSubmission")?.submissionFiles ?? [];
+      if (!files.length) return dash;
+      return <a href={files[0].url} target="_blank" rel="noreferrer" title={files[0].name} className="font-semibold text-brand-dark hover:underline">{files[0].url.endsWith(".pdf") ? "View PDF" : "View file"}</a>;
+    },
   },
   quotation: {
     label: "Bank Quotation",
     cell: (r) =>
-      step(r, "fileSubmission") ? (
-        <Stack top={money(step(r, "fileSubmission").bankQuotation)} bottom={step(r, "fileSubmission").responsiblePerson} />
+      bankStep(r)?.bank ? (
+        <Stack top={money(bankStep(r).bankQuotation)} bottom={bankStep(r).responsiblePerson} />
       ) : (
         dash
       ),
   },
   firstAmount: {
-    label: "First Installment",
+    label: "Bank 70% Received",
     cell: (r) => (step(r, "firstInstallment") ? money(step(r, "firstInstallment").amount) : dash),
   },
   dpAmount: {
-    label: "DP Received",
+    label: "Down Payment Received",
     cell: (r) => (step(r, "receiveDp") ? money(step(r, "receiveDp").amount) : dash),
   },
   remark: remarkCol,
@@ -265,6 +284,25 @@ export const C = {
       if (!sent.length) return dash;
       const last = sent.at(-1);
       return <Stack top={day(last.at)} bottom={`${last.by}${sent.length > 1 ? ` · ${sent.length}x` : ""}`} />;
+    },
+  },
+  meterImage: {
+    label: "Meter Image",
+    cell: (r) => {
+      const files = step(r, "meterInspection")?.meterImages ?? [];
+      if (!files.length) return dash;
+      return (
+        <div className="flex gap-1.5">
+          {files.map((file) => (
+            <a key={file.url} href={file.url} target="_blank" rel="noreferrer" title={file.name} className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+              {file.url.endsWith(".pdf") ? "PDF" : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={file.url} alt={file.name} className="h-full w-full object-cover" />
+              )}
+            </a>
+          ))}
+        </div>
+      );
     },
   },
   approvalImage: {
@@ -331,13 +369,13 @@ export const C = {
 // Each step's own submitted data (History tab).
 export const OUT = {
   documentReceive: [C.received, C.verification, C.names],
-  login: [C.loginDetail],
+  login: [C.pmsgNumber, C.loginDetail],
   nameCheck: [C.verified],
   siteSurvey: [C.contact, C.surveyDate],
   paymentWorkStart: [C.cashLoan],
-  bankFileReady: [remarkCol("bankFileReady")],
+  bankFileReady: [C.bankInfo, C.quotation, remarkCol("bankFileReady")],
   loanIssue: [remarkCol("loanIssue")],
-  fileSubmission: [C.bankInfo, C.quotation, remarkCol("fileSubmission")],
+  fileSubmission: [C.submittedFile],
   firstInstallment: [C.firstAmount, remarkCol("firstInstallment")],
   receiveDp: [C.dpAmount, remarkCol("receiveDp")],
   dispatch: [remarkCol("dispatch")],
@@ -347,7 +385,7 @@ export const OUT = {
   cashDispatch: [remarkCol("cashDispatch")],
   assignInstaller: [C.installer, remarkCol("assignInstaller", "Working Remarks")],
   inspectionFile: [remarkCol("inspectionFile")],
-  meterInspection: [remarkCol("meterInspection", "Working Remarks")],
+  meterInspection: [C.meterImage, remarkCol("meterInspection")],
   generationWifi: [remarkCol("generationWifi", "Working Remarks")],
   tariffCheck: [remarkCol("tariffCheck")],
   warranty: [C.warrantyBalance, C.warrantyDetail, C.warrantyHandover, remarkCol("warranty")],
@@ -361,7 +399,7 @@ export const CARRY = {
   paymentWorkStart: [C.routeAmount, C.contact, C.surveyDate],
   bankFileReady: [C.cashLoan, C.routeAmount, C.contact],
   loanIssue: [C.cashLoan, C.routeAmount],
-  fileSubmission: [C.cashLoan, C.routeAmount],
+  fileSubmission: [C.cashLoan, C.routeAmount, C.bankInfo, C.quotation],
   firstInstallment: [C.bankInfo, C.quotation, C.routeAmount],
   receiveDp: [C.bankInfo, C.quotation, C.firstAmount],
   dispatch: [C.surveyDispatch, C.quotation, C.firstAmount, C.dpAmount],

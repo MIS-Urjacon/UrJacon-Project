@@ -6,7 +6,7 @@ import { ROLE_LABEL } from "@/lib/access";
 
 // Pick one or several employees for a lead / case. With nobody ticked, the work is automatic:
 // everyone who has access to the page it is on can see it. `ids` can hold several records.
-export default function AssignDialog({ open, type, ids, current = [], onClose, onDone }) {
+export default function AssignDialog({ open, type, page, ids, current = [], onClose, onDone }) {
   const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState(current);
   const [saving, setSaving] = useState(false);
@@ -14,11 +14,13 @@ export default function AssignDialog({ open, type, ids, current = [], onClose, o
 
   useEffect(() => {
     if (!open) return;
-    setSelected(current);
-    setError("");
-    fetch("/api/assignees")
+    fetch(`/api/assignees?page=${encodeURIComponent(page)}`)
       .then((r) => (r.ok ? r.json() : []))
-      .then(setUsers)
+      .then((list) => {
+        setSelected(current);
+        setError("");
+        setUsers(list);
+      })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, current.join(",")]);
@@ -31,7 +33,7 @@ export default function AssignDialog({ open, type, ids, current = [], onClose, o
     const res = await fetch("/api/assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, ids, userIds: selected }),
+      body: JSON.stringify({ type, page, ids, userIds: selected }),
     });
     const j = await res.json();
     setSaving(false);
@@ -70,8 +72,9 @@ export default function AssignDialog({ open, type, ids, current = [], onClose, o
           ))}
         </div>
         <p className="text-xs text-slate-500">
-          Nobody ticked = automatic: every employee who has access to this page sees the work. Ticked employees
-          (plus admin and management) see it only until it moves to the next step.
+          <b>Temporary assignment:</b> only these employees (plus admin and management) get this work, until it moves to
+          its next step. For all work on a page, permanently, use Settings &gt; Assignees. Nobody ticked = the page&apos;s
+          normal assignees see the work.
         </p>
         <div className="flex items-center justify-end gap-3">
           {error && <span className="mr-auto text-sm font-medium text-rose-600">{error}</span>}

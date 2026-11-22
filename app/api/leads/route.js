@@ -22,7 +22,7 @@ export async function POST(request) {
   const guard = await requireLeadWriter();
   if (guard.error) return guard.error;
   const input = cleanLeadInput(await request.json());
-  const error = validateLead(input);
+  const error = validateLead(input) || (input.bpScNumber ? null : "BP SC Number is required for a new lead");
   if (error) return NextResponse.json({ error }, { status: 400 });
 
   const leads = await readLeads();

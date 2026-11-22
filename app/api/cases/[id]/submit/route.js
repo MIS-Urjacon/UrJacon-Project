@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCase, saveCase } from "@/lib/store";
-import { ALL_STEPS, STAGE_LABEL, TAT_DAYS, nextStage, newSchedule, surveyOpen } from "@/lib/workflow";
+import { ALL_STEPS, STAGE_LABEL, TAT_DAYS, agreementFirst, nextStage, newSchedule, surveyOpen } from "@/lib/workflow";
 import { evaluate } from "@/lib/validate";
 import { getSession } from "@/lib/session";
 import { canSubmitStep } from "@/lib/access";
@@ -22,15 +22,36 @@ export async function POST(request, { params }) {
   }
   const row = await getCase(id);
   if (!row || !(await canSeeRecord(me, row))) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  // A case that has not passed Login yet follows the new flow (Login -> corrections -> Agreement -> Survey / Payment).
+  if (step === "login" && Number(row.workflowVersion) < 3 && !row.steps?.paymentWorkStart && !row.steps?.agreementUpload) row.workflowVersion = 3;
   // Site Survey is filled in parallel with Payment Work Start, so the case is not "at" it.
   const parallelSurvey = step === "siteSurvey" && row.stage !== "siteSurvey" && surveyOpen(row);
   if (row.stage !== step && !parallelSurvey) {
     return NextResponse.json({ error: "This case is not at this step" }, { status: 409 });
   }
-  const result = evaluate(step, data, row);
+  // Site Survey: the survey date and the surveyor are the day and the signed-in user, never typed.
+  const surveyInput = step === "siteSurvey"
+    ? { ...data, surveyDate: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }), surveyorName: me.name ?? "", surveyorUsername: me.username ?? "" }
+    : data;
+  const result = evaluate(step, surveyInput, row);
   if (result.error) return NextResponse.json({ error: result.error }, { status: 400 });
 
   const now = new Date().toISOString();
+  // Document Receive sets the case price (price list, subsidy, system) that every later step reads.
+  const priced = step === "documentReceive" ? result.data.pricing : null;
+  if (priced) {
+    Object.assign(row, {
+      dealAmount: priced.price,
+      kwWanted: priced.kw,
+      productCode: priced.productCode || row.productCode || "",
+      quotationCentralSubsidy: priced.centralSubsidy,
+      quotationStateSubsidy: priced.stateSubsidy,
+      quotationSubsidy: priced.subsidy,
+      quotationGridType: priced.gridType,
+      quotationDcrType: priced.dcrType,
+      ...(priced.panelBrand ? { quotationPanelBrand: priced.panelBrand } : {}),
+    });
+  }
   row.steps = {
     ...row.steps,
     [step]: {
@@ -57,7 +78,7 @@ export async function POST(request, { params }) {
     if (assigneeIds(row).length) Object.assign(row, NO_ASSIGNMENT); // next step: back to automatic
     if (next in TAT_DAYS) row.schedule[next] = newSchedule(next, now);
     // Login done also opens Site Survey (parallel to Payment Work Start).
-    if (step === "login" && row.steps.siteSurvey?.status !== "done") {
+    if (((step === "login" && !agreementFirst(row)) || (step === "agreementUpload" && agreementFirst(row))) && row.steps.siteSurvey?.status !== "done") {
       row.schedule.siteSurvey = row.schedule.siteSurvey?.timestamp ? row.schedule.siteSurvey : newSchedule("siteSurvey", now);
     }
   }

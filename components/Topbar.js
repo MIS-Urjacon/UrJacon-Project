@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ROLE_LABEL } from "@/lib/access";
-import { CalendarDays, Bell, LogOut } from "lucide-react";
+import { CalendarDays, LogOut } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 import { useMe } from "@/lib/useMe";
 
 export default function Topbar() {
@@ -36,13 +37,7 @@ export default function Topbar() {
           <CalendarDays size={15} className="text-slate-400" />
           {today || " "}
         </div>
-        <button
-          aria-label="Notifications"
-          className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
-        >
-          <Bell size={16} />
-          <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-rose-500" />
-        </button>
+        <NotificationBell />
         <div className="mx-1 h-6 w-px bg-slate-200" />
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">

@@ -7,14 +7,15 @@ import Modal from "@/components/Modal";
 import AssignDialog from "@/components/AssignDialog";
 import AssigneeCell from "@/components/AssigneeCell";
 import { useMe } from "@/lib/useMe";
-import { canAssign, assigneeIds } from "@/lib/assign";
+import { canAssign, canManagePageAssignment, assigneeIdsForPage } from "@/lib/assign";
 import { Avatar, DateCell, Pill, Toast } from "@/components/ui";
 import { leadStageLabel } from "@/lib/leadConstants";
 
-const TEMPERATURE_COLOR = { Hot: "red", Warm: "amber", Cold: "blue", Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
+const TEMPERATURE_COLOR = { Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
 const EMPTY_COLUMNS = [];
 
-export default function LeadPipelinePage({ title, subtitle, filter, Form, modalTitle, historyFilter, historyColumns = EMPTY_COLUMNS, extraColumns = EMPTY_COLUMNS, selectable = false, PendingView, stageLabel = leadStageLabel, canRevise }) {
+export default function LeadPipelinePage({ title, subtitle, pageSlug, filter, Form, modalTitle, historyFilter, historyColumns = EMPTY_COLUMNS, extraColumns = EMPTY_COLUMNS, selectable = false, PendingView, stageLabel = leadStageLabel, canRevise }) {
+  const assignmentPage = pageSlug ?? (title === "Call Tracker" ? "call-tracker" : title === "Quotation & Documents" ? "quotation" : "");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -23,6 +24,7 @@ export default function LeadPipelinePage({ title, subtitle, filter, Form, modalT
   const [toast, setToast] = useState("");
   const [tab, setTab] = useState("pending");
   const me = useMe();
+  const canDelegate = canManagePageAssignment(me, assignmentPage);
   const [assignOpen, setAssignOpen] = useState(false);
   const [issueRows, setIssueRows] = useState(null); // leads whose issue is being reported
   const checkable = selectable || tab === "pending"; // ticks offer Report Issue (and Assign for admin / management)
@@ -119,7 +121,7 @@ export default function LeadPipelinePage({ title, subtitle, filter, Form, modalT
           <div className="flex items-center gap-4">
             <div className="text-sm text-slate-400">{shown.length} {tab === "history" ? "quotations" : "pending"}</div>
             {checkable && selectedRows.length > 0 && <button type="button" onClick={() => setIssueRows(selectedRows)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"><AlertTriangle size={15} />Report Issue{selectedRows.length > 1 ? ` (${selectedRows.length})` : ""}</button>}
-            {checkable && canAssign(me) && selectedRows.length > 0 && <button type="button" onClick={() => setAssignOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Assign{selectedRows.length > 1 ? ` (${selectedRows.length})` : ""}</button>}
+            {checkable && canDelegate && (tab === "pending" || canAssign(me)) && selectedRows.length > 0 && <button type="button" onClick={() => setAssignOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Assign{selectedRows.length > 1 ? ` (${selectedRows.length})` : ""}</button>}
             {selectable && selectedRows.length > 0 && <button type="button" onClick={() => setModal(selectedRows[0])} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark"><ClipboardCheck size={15} />Submit{selectedRows.length > 1 ? ` (${selectedRows.length})` : ""}</button>}
           </div>
         </div>
@@ -153,7 +155,7 @@ export default function LeadPipelinePage({ title, subtitle, filter, Form, modalT
       <Modal open={!!issueRows} onClose={() => setIssueRows(null)} title="Report Issue" subtitle={issueRows ? (issueRows.length > 1 ? `${issueRows.length} leads selected` : `${issueRows[0].customerName} · ${issueRows[0].id}`) : ""} maxWidth="max-w-2xl">
         {issueRows && <IssueReportForm key={issueRows.map((row) => row.id).join(",")} row={issueRows[0]} count={issueRows.length} stageLabel={issueRows[0].leadStage === "quotation" ? "Quotation" : "Call Tracker"} notice={issueRows[0].leadStage === "quotation" ? "The lead goes back to Call Tracker with these details." : "The lead stays in Call Tracker, flagged with these details, until the next call outcome is recorded."} onSubmit={reportIssue} onCancel={() => setIssueRows(null)} />}
       </Modal>
-      <AssignDialog open={assignOpen} type="lead" ids={selectedRows.map((row) => row.id)} current={selectedRows.length === 1 ? assigneeIds(selectedRows[0]) : []} onClose={() => setAssignOpen(false)} onDone={afterAssign} />
+      <AssignDialog open={assignOpen} type="lead" page={assignmentPage} ids={selectedRows.map((row) => row.id)} current={selectedRows.length === 1 ? assigneeIdsForPage(selectedRows[0], assignmentPage) : []} onClose={() => setAssignOpen(false)} onDone={afterAssign} />
       <Toast message={toast} />
     </div>
   );

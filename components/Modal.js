@@ -16,17 +16,21 @@ export default function Modal({
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
+    // Lock the page behind the popup without the page jumping sideways when its scrollbar disappears.
+    const gap = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
+    if (gap > 0) document.body.style.paddingRight = `${gap}px`;
     return () => {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
     };
   }, [open, onClose]);
 
   if (!open) return null;
   return (
     <div
-      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
+      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -47,7 +51,7 @@ export default function Modal({
             <X size={18} />
           </button>
         </div>
-        <div className={`overflow-y-auto ${bodyClass}`}>{children}</div>
+        <div className={`overflow-y-auto overscroll-contain ${bodyClass}`}>{children}</div>
         {footer && (
           <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/60 px-7 py-4">
             {footer}

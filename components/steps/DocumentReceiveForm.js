@@ -7,6 +7,7 @@ import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 import { NAME_DOCS, STAGE_LABEL, normName } from "@/lib/workflow";
 import QuoteButton from "@/components/steps/QuoteButton";
+import DocumentPricing from "@/components/steps/DocumentPricing";
 
 export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel }) {
   const prev = row.steps?.documentReceive;
@@ -30,13 +31,31 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
   // Cash / Loan chosen here is picked up by Payment Work Start (which keeps its own field).
   const [paymentMode, setPaymentMode] = useState(prev?.paymentMode ?? row.preferredPaymentMode ?? "");
   const [terracePhoto, setTerracePhoto] = useState(prev?.terracePhotoFiles ?? []);
+  // The case price comes from the price list here (not from a quotation).
+  const [pricing, setPricing] = useState(() => ({
+    kw: prev?.pricing?.kw ?? row.kwWanted ?? "",
+    price: prev?.pricing?.price ?? (Number(row.dealAmount) || ""),
+    centralSubsidy: prev?.pricing?.centralSubsidy ?? "",
+    stateSubsidy: prev?.pricing?.stateSubsidy ?? "",
+    productCode: prev?.pricing?.productCode ?? row.productCode ?? "",
+    gridType: prev?.pricing?.gridType ?? (row.productInterested === "Hybrid" ? "Hybrid" : "On-grid"),
+    dcrType: prev?.pricing?.dcrType ?? "DCR",
+    panelBrand: prev?.pricing?.panelBrand ?? row.brand ?? "",
+  }));
   // Pricing and the other details filled at Lead / Quotation (older cases are read from their lead).
   const [lead, setLead] = useState(null);
   useEffect(() => {
     if (!row.leadId) return;
     fetch("/api/leads").then((r) => (r.ok ? r.json() : [])).then((list) => setLead(list.find((l) => l.id === row.leadId) ?? null)).catch(() => {});
   }, [row.leadId]);
-  const pick = (key) => row[key] ?? lead?.[key];
+  const pick = (key) => row[key] || lead?.[key];
+  // Already filled on the Lead page: not asked again here.
+  const known = {
+    kw: Number(pick("kwWanted")) > 0 ? pick("kwWanted") : "",
+    productCode: pick("productCode") || "",
+    panelBrand: pick("brand") || "",
+    gridType: pick("productInterested") === "Hybrid" ? "Hybrid" : pick("productInterested") === "On-grid" ? "On-grid" : "",
+  };
   const [receivedDate, setReceivedDate] = useState(prev?.receivedDate ?? new Date().toISOString().slice(0, 10));
 
   const ref = normName(row.customerName);
@@ -72,6 +91,8 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
     if (!receivedThrough) return setErr("Select how the documents were received");
     if (!receivedDate) return setErr("Select the received date");
     if (!systemType) return setErr("Select Tata or Non-Tata system type");
+    if (!(Number(pricing.kw || known.kw) > 0)) return setErr("Enter the system size in kW");
+    if (!(Number(pricing.price) > 0)) return setErr("Enter the system price");
     if (anyCorrection && !correctionType) return setErr("Select the required correction type");
     if (anyCorrection && !correctionReason.trim()) return setErr("Enter the correction reason");
     setSaving(true);
@@ -82,6 +103,7 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
       systemType,
       paymentMode,
       terracePhotoFiles: terracePhoto,
+      pricing: { ...pricing, kw: pricing.kw || known.kw, productCode: pricing.productCode || known.productCode, panelBrand: pricing.panelBrand || known.panelBrand, gridType: known.gridType || pricing.gridType },
       correctionType: anyCorrection ? correctionType : "",
       correctionReason: anyCorrection ? correctionReason : "",
     });
@@ -113,6 +135,7 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
         </div>
       )}
       <LeadDetails row={row} pick={pick} />
+      <DocumentPricing value={pricing} onChange={setPricing} known={known} readOnly={readOnly} />
 
       <fieldset disabled={readOnly} className="grid gap-4 sm:grid-cols-3">
         <label className="block">
@@ -303,20 +326,11 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
 
 const money = (value) => (Number(value) > 0 ? `₹${Number(value).toLocaleString("en-IN")}` : "");
 
-// Pricing and the other details already filled at Lead / Quotation, shown for reference.
+// The details filled at Lead, shown for reference. The price is set below.
 function LeadDetails({ row, pick }) {
-  const price = Number(pick("dealAmount")) || 0;
-  const central = Number(pick("quotationCentralSubsidy")) || 0;
-  const stateSubsidy = Number(pick("quotationStateSubsidy")) || 0;
-  const subsidy = central + stateSubsidy || Number(pick("quotationSubsidy")) || 0;
   const kw = pick("kwWanted");
   const items = [
-    ["Quotation", pick("quotationReference")],
-    ["System", [kw ? `${kw} kW` : "", pick("quotationGridType"), pick("quotationDcrType")].filter(Boolean).join(" · ")],
-    ["System Price", money(price)],
-    ["Central Subsidy", money(central)],
-    ["State Subsidy", money(stateSubsidy)],
-    ["Cost After Subsidy", price ? money(Math.max(0, price - subsidy)) : ""],
+    ["Requirement", kw ? `${kw} kW` : ""],
     ["Brand", pick("brand") || pick("quotationPanelBrand")],
     ["Product Interested", pick("productInterested")],
     ["Pricing", pick("pricing")],
@@ -332,16 +346,14 @@ function LeadDetails({ row, pick }) {
   return (
     <details className="group rounded-xl border border-slate-200 bg-slate-50/60" open>
       <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-        Lead &amp; quotation details
+        Lead details
         <ChevronDown size={15} className="transition group-open:rotate-180" />
       </summary>
       <div className="grid gap-x-6 gap-y-3 border-t border-slate-200 px-4 py-3 sm:grid-cols-3 lg:grid-cols-4">
-        {items.map(([label, value]) => (
+        {items.filter(([, value]) => value).map(([label, value]) => (
           <div key={label} className="min-w-0">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
-            <div className="mt-0.5 truncate text-sm font-semibold text-slate-800" title={value || ""}>
-              {value || <span className="font-normal text-slate-300">-</span>}
-            </div>
+            <div className="mt-0.5 truncate text-sm font-semibold text-slate-800" title={value}>{value}</div>
           </div>
         ))}
       </div>

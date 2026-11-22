@@ -67,7 +67,7 @@ export default function AssigneesTab() {
     if (!res.ok) return setError(j.error ?? "Could not save");
     setDefaults(j);
     setEditing(null);
-    setToast("Default assignees saved");
+    setToast("Permanent assignees saved");
     setTimeout(() => setToast(""), 2400);
   }
 
@@ -160,6 +160,7 @@ export default function AssigneesTab() {
               </label>
             ))}
           </div>
+          <p className="text-xs text-slate-500"><b>Permanent assignment:</b> these employees get all work that comes to this page, now and in future, until you change it here. Admin and management can still give one piece of work to someone else with the Assign button (temporary).</p>
           <p className="text-xs text-slate-500">Ticked by default: the person who owns this page. Keeping exactly these stays on the page owner; change the ticks to give the page to someone else.</p>
           <div className="flex items-center justify-end gap-3">
             {error && <span className="mr-auto text-sm font-medium text-rose-600">{error}</span>}

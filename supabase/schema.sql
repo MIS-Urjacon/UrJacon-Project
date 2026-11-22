@@ -123,7 +123,7 @@ create table if not exists public.urjacon_leads (
   kw_wanted           numeric not null default 0,
   product_code        text not null default '',
   payment_mode        text not null default '',
-  temperature         text not null default 'Warm',
+  temperature         text not null default 'Follow up Required',
   next_follow_up      text not null default '',
   outcome             text not null default '',
   quotation_reference text not null default '',
@@ -177,6 +177,31 @@ create table if not exists public.urjacon_masters (
   sort_order int  not null default 0,
   constraint uj_masters_pk primary key (type, value)
 );
+
+-- Assignment log (Assign Work page + the bell): one row per assignee per assignment.
+create table if not exists public.urjacon_assignments (
+  id               text primary key,
+  record_type      text not null,                 -- 'lead' | 'case'
+  record_id        text not null,                 -- L-0001 / C-0001
+  customer_name    text not null default '',
+  bp_sc_number     text not null default '',
+  page             text not null default '',      -- page slug the work was on, e.g. 'document-receive'
+  page_label       text not null default '',
+  action           text not null default 'assigned',   -- 'assigned' | 'removed'
+  kind             text not null default 'temporary',  -- 'temporary' (Assign button) | 'permanent' (Settings > Assignees)
+  assigned_to_id   text not null default '',
+  assigned_to_name text not null default '',
+  assigned_by_id   text not null default '',
+  assigned_by_name text not null default '',
+  assigned_on      date,                          -- the assign date picked in the dialog
+  assigned_at      timestamptz not null default now(),
+  seen_at          timestamptz                    -- null = the assignee has not read the message yet
+);
+
+create index if not exists uj_assignments_to_idx     on public.urjacon_assignments (assigned_to_id, seen_at);
+create index if not exists uj_assignments_record_idx on public.urjacon_assignments (record_id);
+create index if not exists uj_assignments_at_idx     on public.urjacon_assignments (assigned_at desc);
+
 
 create index if not exists uj_cases_bp_idx     on public.urjacon_cases (bp_sc_number);
 create index if not exists uj_cases_stage_idx  on public.urjacon_cases (stage);
@@ -253,7 +278,7 @@ begin
            coalesce(data->>'bpScNumber', ''), coalesce(data->>'source', ''), coalesce(data->>'agent', ''),
            coalesce((data->>'monthlyBill')::numeric, 0), coalesce((data->>'kwWanted')::numeric, 0),
            coalesce(data->>'productCode', ''), coalesce(data->>'paymentMode', ''),
-           coalesce(data->>'temperature', 'Warm'), coalesce(data->>'nextFollowUp', ''),
+           coalesce(data->>'temperature', 'Follow up Required'), coalesce(data->>'nextFollowUp', ''),
            coalesce(data->>'outcome', ''), coalesce(data->>'quotationReference', ''),
            coalesce((data->>'commission')::numeric, 0),
            coalesce(data->>'branch', ''), coalesce(data->>'dealer', ''),
@@ -311,7 +336,7 @@ declare t text;
 begin
   foreach t in array array[
     'urjacon_cases','urjacon_case_steps','urjacon_case_schedule',
-    'urjacon_leads','urjacon_lead_followups','urjacon_users','urjacon_masters'
+    'urjacon_leads','urjacon_lead_followups','urjacon_users','urjacon_masters','urjacon_assignments'
   ]
   loop
     execute format('alter table public.%I enable row level security', t);

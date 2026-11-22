@@ -14,11 +14,11 @@ const baseColumns = [
 
 // Build each form once (module level) so its identity stays stable across renders.
 const FORMS = {
-  bankFileReady: makeSimpleForm({ stepKey: "bankFileReady" }),
+  bankFileReady: makeSimpleForm({ stepKey: "bankFileReady", extra: EXTRA_FIELDS.bankFileReady }),
   loanIssue: makeSimpleForm({ stepKey: "loanIssue" }),
-  fileSubmission: makeSimpleForm({ stepKey: "fileSubmission", extra: EXTRA_FIELDS.fileSubmission }),
-  firstInstallment: makeSimpleForm({ stepKey: "firstInstallment", withAmount: true }),
-  receiveDp: makeSimpleForm({ stepKey: "receiveDp", withAmount: true }),
+  fileSubmission: makeSimpleForm({ stepKey: "fileSubmission", extra: EXTRA_FIELDS.fileSubmission, noRemark: true }),
+  firstInstallment: makeSimpleForm({ stepKey: "firstInstallment", withAmount: true, amountLabel: "Bank 70% Amount Received (₹)" }),
+  receiveDp: makeSimpleForm({ stepKey: "receiveDp", withAmount: true, amountLabel: "Down Payment Received (₹)" }),
   dispatch: makeSimpleForm({ stepKey: "dispatch" }),
 };
 

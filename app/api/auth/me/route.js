@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { COOKIE_NAME, SESSION_SECONDS, createSession } from "@/lib/auth";
 import { getSession } from "@/lib/session";
+import { GRANTABLE_PAGES } from "@/lib/access";
+import { canManagePageAssignment } from "@/lib/assign";
+import { readAssigneeDefaults } from "@/lib/defaultAssignees";
 
 export async function GET() {
   const user = await getSession();
   if (user) {
+    const defaults = await readAssigneeDefaults();
+    const publicUser = {
+      ...user,
+      assignmentPages: GRANTABLE_PAGES.filter((slug) => canManagePageAssignment(user, slug, defaults)),
+    };
     // Re-issue the cookie so role / page-access changes reach proxy.js without a new sign-in.
-    const res = NextResponse.json(user);
+    const res = NextResponse.json(publicUser);
     res.cookies.set(COOKIE_NAME, await createSession(user), {
       httpOnly: true, sameSite: "lax", path: "/", maxAge: SESSION_SECONDS,
     });

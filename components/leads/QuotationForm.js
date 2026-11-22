@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { useDeferredValue, useRef, useState } from "react";
+import { MessageCircle, Printer } from "lucide-react";
 import { Button } from "@/components/ui";
 import { Label } from "@/components/steps/shared";
 import QuotationSummary from "@/components/leads/QuotationSummary";
-import { DEFAULT_INCLUDED, DEFAULT_PANEL_WP, QDOC_CSS, defaultInverter, defaultMeter, defaultPanelCount, defaultPaymentTerms, paymentModeLabel } from "@/lib/quotationFormat";
-
-// Inputs inside the quotation document: look like filled-in blanks of the printed format.
-const QEDIT_CSS = `.qdoc .qin{font:inherit;color:inherit;background:#FFFBEB;border:0;border-bottom:1.5px dashed #E8C66A;border-radius:4px 4px 0 0;padding:1px 6px;outline:none}.qdoc .qin:focus{background:#FFF3CC;border-bottom-color:#F6B02B}.qdoc .qin::placeholder{color:#B4AC94}.qdoc select.qin{cursor:pointer}.qdoc textarea.qin{display:block;line-height:1.5}.qdoc input[type=number].qin{-moz-appearance:textfield}`;
+import ProposalFrame from "@/components/leads/ProposalFrame";
+import ProposalBuilder from "@/components/leads/ProposalBuilder";
+import { initialProposal, leadFieldsFrom } from "@/lib/proposal/lead";
+import { compute } from "@/lib/proposal/engine";
+import { defaultPaymentTerms } from "@/lib/quotationFormat";
 
 export default function QuotationForm({ row, onComplete, onRefresh, onCancel, readOnly = false, idle = false, revising = false }) {
   const [form, setForm] = useState(() => ({
@@ -28,31 +29,26 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
     quotationGridType: row.quotationGridType || row.productInterested || "",
     documents: { ...(row.documents ?? {}) },
   }));
-  const [masters, setMasters] = useState({});
+  // The quotation is the UrjaCon proposal (11 pages): builder answers + two uploaded pictures.
+  const [proposal, setProposal] = useState(() => initialProposal(row));
+  const preview = useDeferredValue(proposal);
+  const frame = useRef(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [revisionReason, setRevisionReason] = useState("");
-  const [today, setToday] = useState("");
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- the date must not be read while prerendering
-  useEffect(() => { setToday(new Date().toISOString()); }, []);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
-  useEffect(() => {
-    fetch("/api/masters").then((response) => response.ok ? response.json() : {}).then(setMasters).catch(() => {});
-  }, []);
-
   function validateForSend() {
-    if (!form.quotationReference?.trim()) return "Enter the quotation reference";
-    if (!form.quotationEntity) return "Select Urjacon or Tuskin quotation entity";
-    if (!form.quotationSystemType?.trim()) return "Enter the quotation system type";
-    if (!form.quotationDcrType) return "Select DCR or NDCR";
-    if (!form.quotationGridType) return "Select On-grid or Hybrid";
-    if (!(Number(form.kwWanted) > 0)) return "Enter the system size in kW";
-    if (!(Number(form.dealAmount) > 0)) return "Enter the quotation price";
+    const ps = proposal.state;
+    if (!ps.ref?.trim()) return "Enter the quotation Ref. No.";
+    if (!ps.cust?.trim()) return "Enter the customer name";
+    if (!ps.dcr) return "Select DCR or NDCR";
+    const c = compute(ps);
+    if (!(c.kw > 0)) return "Enter the system size in kW";
+    if (!(c.grand > 0)) return "Enter the quotation price";
     return null;
   }
-
 
   async function saveQuotation(mode) {
     setError("");
@@ -83,15 +79,11 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
       body: JSON.stringify({
         ...form,
         ...revision,
+        ...leadFieldsFrom(proposal.state, proposal.media, form),
+        paymentMode: form.paymentMode,
         action: "save",
-        leadStage: "quotation",
         quotationStatus: "draft",
         quotationCreatedAt: revision.quotationCreatedAt || form.quotationCreatedAt || now,
-        // The quotation shows central and state subsidy; the total stays in quotationSubsidy.
-        quotationSubsidy: Number(form.quotationCentralSubsidy || 0) + Number(form.quotationStateSubsidy || 0) || Number(form.quotationSubsidy || 0),
-        quotationTerms: form.quotationTerms?.trim() ? form.quotationTerms : defaultPaymentTerms(form.paymentMode),
-        productCode: form.productCode || (Number(form.kwWanted) > 0 ? `PMSG-${Number(form.kwWanted)}KW` : ""),
-        outcome: "Quotation created",
       }),
     });
     const updated = await update.json();
@@ -109,8 +101,8 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
     setSaving(false);
     if (!send.ok) return setError(result.error ?? "Could not mark the quotation as sent");
     onComplete(revising
-      ? `Revision R${result.lead.quotationRevision} of ${result.lead.quotationReference} sent. Call Tracker shows the latest quotation.`
-      : `Quotation ${result.lead.quotationReference} sent. ${row.id} is back in Call Tracker for the customer response.`);
+      ? `Revision R${result.lead.quotationRevision} of ${result.lead.quotationReference} sent.`
+      : `Quotation ${result.lead.quotationReference} sent.`);
   }
 
   if (readOnly) {
@@ -121,16 +113,8 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
   const changeMode = (mode) => setForm((current) => ({
     ...current,
     paymentMode: mode,
-    // Standard terms follow the payment mode until someone edits them.
     quotationTerms: !current.quotationTerms?.trim() || current.quotationTerms === defaultPaymentTerms(current.paymentMode) ? defaultPaymentTerms(mode) : current.quotationTerms,
   }));
-  // Today's date is set after mount (no new Date() while prerendering).
-  const issued = form.quotationCreatedAt && !revising ? form.quotationCreatedAt : today;
-  const validTill = issued ? new Date(new Date(issued).getTime() + (Number(form.quotationValidityDays) || 15) * 86400000) : null;
-  const day = (value) => (value ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
-  const net = Math.max(0, Number(form.dealAmount || 0) - Number(form.quotationCentralSubsidy || 0) - Number(form.quotationStateSubsidy || 0));
-  const place = [[form.village, form.branch].filter(Boolean).join(", "), form.state ? `(${form.state})` : ""].filter(Boolean).join(" ");
-  const urjacon = !/tuskin/i.test(form.quotationEntity || "Urjacon");
 
   return (
     <form onSubmit={(event) => event.preventDefault()} inert={idle} className={`space-y-5 ${idle ? "opacity-60" : ""}`}>
@@ -142,98 +126,17 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
         </div>
       )}
 
-      {/* The quotation itself, in the owner's format: edit the values in place. */}
-      <style>{QDOC_CSS + QEDIT_CSS}</style>
-      <div className="rounded-2xl bg-[#EFEEE8] p-3 sm:p-6">
-        <div className="qdoc">
-          <div className="q-head">
-            <div>
-              {urjacon ? (
-                <svg className="wordmark q-logo" viewBox="0 0 226 100" role="img" aria-label="UrjaCon">
-                  <g fill="none" stroke="#F6B02B" strokeWidth="7" strokeLinecap="round">
-                    <path d="M70 46 A18 18 0 0 1 106 46" />
-                    <path d="M52 46 H61" /><path d="M115 46 H124" /><path d="M88 15 V24" /><path d="M63.5 21.5 L69.9 27.9" /><path d="M112.5 21.5 L106.1 27.9" />
-                  </g>
-                  <text x="113" y="94" textAnchor="middle" fontFamily="Poppins, 'Hanken Grotesk', sans-serif" fontWeight="800" fontSize="51" letterSpacing="-1.2" fill="#141414">UrjaCon</text>
-                </svg>
-              ) : (
-                <div className="q-title" style={{ textAlign: "left" }}>Tuskin</div>
-              )}
-              <div className="q-ent">
-                <select className="qin" aria-label="Entity" value={form.quotationEntity || "Urjacon"} onChange={(event) => set("quotationEntity", event.target.value)}>
-                  <option value="Urjacon">UrjaCon</option>
-                  <option value="Tuskin">Tuskin</option>
-                </select>
-                , registered vendor under PM Surya Ghar: Muft Bijli Yojana
-              </div>
-            </div>
-            <div className="q-meta">
-              <div className="q-title">Quotation</div>
-              <dl>
-                <dt>Ref.</dt><dd><input className="qin w-44" aria-label="Quotation reference" placeholder="URJ/Q/26-27/0107" value={form.quotationReference ?? ""} onChange={(event) => set("quotationReference", event.target.value)} /></dd>
-                <dt>Date</dt><dd>{day(issued)}</dd>
-                <dt>Valid till</dt><dd>{day(validTill)} <span className="font-normal text-[#5F5F5A]">(<input className="qin w-12 text-center" type="number" min={1} aria-label="Validity in days" value={form.quotationValidityDays ?? ""} onChange={(event) => set("quotationValidityDays", event.target.value)} /> days)</span></dd>
-              </dl>
-            </div>
+      {/* Same as the Proposal Studio: values on the left, the template on the right. */}
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(380px,440px)_minmax(0,1fr)]">
+        <ProposalBuilder proposal={proposal} setProposal={setProposal} paymentMode={form.paymentMode ?? ""} modeOptions={modeOptions} onPaymentMode={changeMode} />
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:sticky xl:top-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
+            <div className="font-semibold text-slate-800">Proposal preview <span className="ml-1 text-xs font-normal text-slate-400">11 pages, updates as you type</span></div>
+            <button type="button" onClick={() => frame.current?.print()} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:border-brand hover:text-brand-dark"><Printer size={14} />Print / Save PDF</button>
           </div>
-
-          <div className="q-to">
-            <div>
-              <span>Prepared for</span><b>{form.customerName || "-"}</b>
-              {place && <div>{place}</div>}
-              {form.mobile && <div>Mobile {form.mobile}</div>}
-            </div>
-            <div>
-              <span>Prepared by</span>
-              <input className="qin w-full text-base font-bold" list="quote-prepared-by" aria-label="Prepared by" placeholder="Name" value={form.quotationPreparedBy ?? ""} onChange={(event) => set("quotationPreparedBy", event.target.value)} />
-              <datalist id="quote-prepared-by">{(masters.dealer ?? []).map((name) => <option key={name} value={name} />)}</datalist>
-              <input className="qin mt-1 w-full" aria-label="Prepared by role" placeholder="Field marketing" value={form.quotationPreparedByRole ?? ""} onChange={(event) => set("quotationPreparedByRole", event.target.value)} />
-            </div>
-          </div>
-
-          <h4>System</h4>
-          <table className="q-t"><tbody>
-            <tr><td>Capacity</td><td>
-              <input className="qin w-16 text-center" type="number" min={0} step="0.1" aria-label="System size in kW" value={form.kwWanted ?? ""} onChange={(event) => set("kwWanted", event.target.value)} /> kW{" "}
-              <input className="qin w-32" aria-label="System type" placeholder="rooftop solar" value={form.quotationSystemType ?? ""} onChange={(event) => set("quotationSystemType", event.target.value)} />,{" "}
-              <select className="qin" aria-label="Grid type" value={form.quotationGridType ?? ""} onChange={(event) => set("quotationGridType", event.target.value)}>
-                <option value="">grid type</option><option value="On-grid">on-grid</option><option value="Hybrid">hybrid</option>
-              </select>
-            </td></tr>
-            <tr><td>Solar panels</td><td>
-              <input className="qin w-14 text-center" type="number" min={0} aria-label="Number of panels" placeholder={String(defaultPanelCount(form.kwWanted, form.quotationPanelWp) || "")} value={form.quotationPanelCount || ""} onChange={(event) => set("quotationPanelCount", event.target.value)} /> ×{" "}
-              <input className="qin w-16 text-center" type="number" min={0} aria-label="Panel wattage" placeholder={String(DEFAULT_PANEL_WP)} value={form.quotationPanelWp || ""} onChange={(event) => set("quotationPanelWp", event.target.value)} /> Wp{" "}
-              <input className="qin w-28 uppercase" list="quote-panel-brand" aria-label="Panel brand" placeholder="BRAND" value={form.quotationPanelBrand ?? ""} onChange={(event) => set("quotationPanelBrand", event.target.value)} />{" "}
-              <datalist id="quote-panel-brand">{(masters.brand ?? []).map((name) => <option key={name} value={name} />)}</datalist>
-              <select className="qin" aria-label="DCR or NDCR" value={form.quotationDcrType ?? ""} onChange={(event) => set("quotationDcrType", event.target.value)}>
-                <option value="">DCR / NDCR</option><option value="DCR">DCR (made in India cells)</option><option value="NDCR">NDCR</option>
-              </select>
-            </td></tr>
-            <tr><td>Inverter</td><td><input className="qin w-full" aria-label="Inverter" placeholder={defaultInverter(form.kwWanted, form.quotationGridType) || "4 kW hybrid inverter with battery support"} value={form.quotationInverter ?? ""} onChange={(event) => set("quotationInverter", event.target.value)} /></td></tr>
-            <tr><td>Included</td><td><textarea className="qin w-full resize-y" rows={2} aria-label="Included" placeholder={DEFAULT_INCLUDED} value={form.quotationIncluded ?? ""} onChange={(event) => set("quotationIncluded", event.target.value)} /></td></tr>
-            <tr><td>Meter</td><td><input className="qin w-full" aria-label="Meter" placeholder={defaultMeter(form.state)} value={form.quotationMeter ?? ""} onChange={(event) => set("quotationMeter", event.target.value)} /></td></tr>
-          </tbody></table>
-
-          <h4>Price</h4>
-          <table className="q-t q-price"><tbody>
-            <tr><td>System price (including GST)</td><td>₹ <input className="qin w-32 text-right" type="number" min={0} aria-label="System price" value={form.dealAmount ?? ""} onChange={(event) => set("dealAmount", event.target.value)} /></td></tr>
-            <tr><td>Central subsidy</td><td>− ₹ <input className="qin w-32 text-right" type="number" min={0} aria-label="Central subsidy" value={form.quotationCentralSubsidy || ""} onChange={(event) => set("quotationCentralSubsidy", event.target.value)} /></td></tr>
-            <tr><td>State subsidy</td><td>− ₹ <input className="qin w-32 text-right" type="number" min={0} aria-label="State subsidy" value={form.quotationStateSubsidy || ""} onChange={(event) => set("quotationStateSubsidy", event.target.value)} /></td></tr>
-            <tr className="q-net"><td>Your cost after subsidy</td><td>₹{net.toLocaleString("en-IN")}</td></tr>
-          </tbody></table>
-
-          <h4>
-            Payment terms (
-            <select className="qin" aria-label="Payment mode" value={form.paymentMode ?? ""} onChange={(event) => changeMode(event.target.value)}>
-              <option value="">payment mode</option>
-              {modeOptions.map((mode) => <option key={mode} value={mode}>{paymentModeLabel(mode) || mode}</option>)}
-            </select>
-            )
-          </h4>
-          <textarea className="qin w-full resize-y" rows={4} aria-label="Payment terms, one per line" placeholder={defaultPaymentTerms(form.paymentMode) || "Select the payment mode to fill the standard terms"} value={form.quotationTerms ?? ""} onChange={(event) => set("quotationTerms", event.target.value)} />
-
-          <div className="q-sign"><div>Customer signature</div><div>For {urjacon ? "UrjaCon" : "Tuskin"}</div></div>
-        </div>
+          <ProposalFrame ref={frame} proposal={preview} height="calc(100vh - 8.5rem)" />
+        </section>
       </div>
 
       {form.source === "Agent" && (

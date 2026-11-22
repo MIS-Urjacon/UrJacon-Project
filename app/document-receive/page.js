@@ -16,11 +16,12 @@ const columns = [
     label: "Issue Report",
     cell: (row) =>
       row.issue ? (
-        <div className="max-w-64 whitespace-normal">
+        // One compact line: the full description is in the Update popup (and in the tooltip here).
+        <div className="max-w-48 leading-tight" title={`${row.issue.type} · ${row.issue.fromLabel}
+${row.issue.description}
+By ${row.issue.reportedBy}`}>
           <Pill color={row.issue.open ? "red" : "green"}>{row.issue.open ? "Issue open" : "Resolved"}</Pill>
-          <div className="mt-1 font-semibold text-slate-700">{row.issue.type} · {row.issue.fromLabel}</div>
-          <div className="text-xs text-slate-500">{row.issue.description}</div>
-          <div className="text-xs text-slate-400">By {row.issue.reportedBy}</div>
+          <div className="mt-1 truncate text-xs font-semibold text-slate-700">{row.issue.type} · {row.issue.fromLabel}</div>
         </div>
       ) : (
         "-"

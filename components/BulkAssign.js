@@ -3,12 +3,12 @@ import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import AssignDialog from "@/components/AssignDialog";
 import { useMe } from "@/lib/useMe";
-import { canAssign, assigneeIds } from "@/lib/assign";
+import { canManagePageAssignment, assigneeIdsForPage } from "@/lib/assign";
 
-// Checkbox selection + bulk "Assign" for a table. Only admin and management get the
-// checkboxes (see `useCanAssign`); everyone else sees the table as before.
-export function useCanAssign() {
-  return canAssign(useMe());
+// Checkbox selection + bulk "Assign" for a table. Admin, management, and the
+// page's normal assignees get the assignment controls.
+export function useCanAssign(page) {
+  return canManagePageAssignment(useMe(), page);
 }
 
 export function useSelection(rows) {
@@ -54,7 +54,7 @@ export function RowBox({ sel, row }) {
 }
 
 // Toolbar button: assigns every ticked row to one employee in a single step.
-export function BulkAssign({ type, sel, onDone }) {
+export function BulkAssign({ type, page, sel, onDone }) {
   const [open, setOpen] = useState(false);
   const count = sel.selected.length;
   const first = sel.selected[0];
@@ -73,8 +73,9 @@ export function BulkAssign({ type, sel, onDone }) {
       <AssignDialog
         open={open}
         type={type}
+        page={page}
         ids={sel.selected.map((row) => row.id)}
-        current={count === 1 ? assigneeIds(first) : []}
+        current={count === 1 ? assigneeIdsForPage(first, page) : []}
         onClose={() => setOpen(false)}
         onDone={(message) => {
           setOpen(false);
