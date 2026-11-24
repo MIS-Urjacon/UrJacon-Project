@@ -18,7 +18,8 @@ function readOptions(children) {
   return out;
 }
 
-export default function Select({ value, onChange, disabled, required, className = "field", children, id, ...rest }) {
+// variant="dropdown" keeps the dropdown whatever the number of options (long or data-driven lists).
+export default function Select({ value, onChange, disabled, required, className = "field", children, id, variant, ...rest }) {
   const options = useMemo(() => readOptions(children), [children]);
   const current = String(value ?? "");
   const selected = options.find((o) => o.value === current);
@@ -84,6 +85,43 @@ export default function Select({ value, onChange, disabled, required, className 
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
     else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (options[active]) pick(options[active]); }
     else if (e.key === "Tab") setOpen(false);
+  }
+
+  // A short list (2 to 4 choices) is shown as radio buttons (round, one answer only) instead of a dropdown. Longer lists keep the dropdown (tick boxes do not fit them).
+  const choices = options.filter((o) => o.value !== "");
+  if (variant !== "dropdown" && choices.length >= 2 && choices.length <= 4) {
+    const pickChoice = (o) => { if (!disabled && !o.disabled && o.value !== current) onChange?.({ target: { value: o.value } }); };
+    return (
+      <div className="relative flex min-h-10 flex-wrap items-center gap-x-5 gap-y-2" role="radiogroup" id={id}>
+        {choices.map((o) => {
+          const on = o.value === current;
+          const off = disabled || o.disabled;
+          return (
+            // A span, not a button / input: inside the field's <label> a click on the title must not tick the first box.
+            <span
+              key={o.value}
+              role="radio"
+              aria-checked={on}
+              aria-disabled={off || undefined}
+              tabIndex={off ? -1 : 0}
+              onClick={() => pickChoice(o)}
+              onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); pickChoice(o); } }}
+              className={`inline-flex select-none items-center gap-2 text-sm outline-none ${off ? "cursor-not-allowed text-slate-400" : "cursor-pointer text-slate-700"}`}
+            >
+              <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition ${on ? "border-brand bg-white" : "border-slate-300 bg-white"} ${off ? "opacity-60" : ""}`}>
+                {on && <span className="h-2.5 w-2.5 rounded-full bg-brand" />}
+              </span>
+              <span className={on ? "font-semibold text-slate-800" : ""}>{o.label}</span>
+            </span>
+          );
+        })}
+        {required && (
+          // Hidden field so the form's native "required" check still works.
+          <input tabIndex={-1} aria-hidden required value={current} onChange={() => {}}
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-px w-full opacity-0" />
+        )}
+      </div>
+    );
   }
 
   const isPlaceholder = !selected || selected.value === "";

@@ -31,6 +31,8 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
   const [error, setError] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState("");
+  // Villages near the captured location (from VoiceOfVillage); the nearest one fills Village, the others can be picked.
+  const [villageNote, setVillageNote] = useState(null); // { loading } | { villages } | { error }
   const [brands, setBrands] = useState([]);
   useEffect(() => {
     fetch("/api/masters").then((r) => (r.ok ? r.json() : {})).then((m) => setBrands(m.brand ?? [])).catch(() => {});
@@ -40,6 +42,21 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
   const temperatureOptions = !form.temperature || TEMPERATURES.includes(form.temperature) ? TEMPERATURES : [...TEMPERATURES, form.temperature];
   const brandOptions = !form.brand || brands.includes(form.brand) ? brands : [...brands, form.brand];
   const kwOptions = !form.kwWanted || KW_OPTIONS.some(([v]) => v === String(form.kwWanted)) ? KW_OPTIONS : [...KW_OPTIONS, [String(form.kwWanted), `${form.kwWanted} kW`]];
+
+  // The village of the captured location fills the Village field (it stays editable).
+  async function findVillage(latitude, longitude) {
+    setVillageNote({ loading: true });
+    try {
+      const response = await fetch(`/api/village?lat=${latitude}&lng=${longitude}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) return setVillageNote({ error: data.error ?? "Village could not be found. Type it yourself." });
+      if (!data.village) return setVillageNote({ error: "No village found near this location. Type it yourself." });
+      set("village", data.village);
+      setVillageNote({ villages: data.villages });
+    } catch {
+      setVillageNote({ error: "Village could not be found. Type it yourself." });
+    }
+  }
 
   function captureLocation() {
     setLocationError("");
@@ -58,6 +75,7 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
           locationCapturedAt: new Date().toISOString(),
         }));
         setLocationLoading(false);
+        findVillage(Number(coords.latitude.toFixed(7)), Number(coords.longitude.toFixed(7)));
       },
       (locationFailure) => {
         setLocationError(locationFailure.code === 1
@@ -89,7 +107,6 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
           <Field label="Email ID" type="email" value={form.email} onChange={(v) => set("email", v)} />
           <Select label="Lead Source" required value={form.source} options={SOURCES} onChange={(v) => set("source", v)} />
           <Select label="State" required value={form.state} options={["Chhattisgarh", "Odisha"]} onChange={(v) => set("state", v)} />
-          <Field label="Village" value={form.village} onChange={(v) => set("village", v)} />
           <label className="block">
             <Label>Live Location</Label>
             <button type="button" disabled={readOnly || locationLoading} onClick={captureLocation} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-brand px-3 text-sm font-semibold text-brand-dark transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60">
@@ -99,6 +116,19 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
             {form.latitude != null && form.longitude != null && <div className="mt-1.5 text-xs text-slate-500">{form.latitude}, {form.longitude}{form.locationAccuracy ? ` · ±${form.locationAccuracy} m` : ""}</div>}
             {locationError && <div className="mt-1.5 text-xs font-medium text-rose-600">{locationError}</div>}
           </label>
+          <div>
+            <Field label="Village" value={form.village} onChange={(v) => set("village", v)} />
+            {villageNote?.loading && <div className="mt-1.5 text-xs text-slate-500">Finding the village of this location...</div>}
+            {villageNote?.error && <div className="mt-1.5 text-xs font-medium text-amber-700">{villageNote.error}</div>}
+            {villageNote?.villages?.length > 1 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                Nearby:
+                {villageNote.villages.map((v) => (
+                  <button key={`${v.name}-${v.place}`} type="button" disabled={readOnly} title={`${v.place}${v.km ? ` · ${v.km} km` : ""}`} onClick={() => set("village", v.name)} className={`rounded-full border px-2 py-0.5 font-semibold transition ${form.village === v.name ? "border-brand bg-brand-50 text-brand-dark" : "border-slate-200 text-slate-600 hover:border-brand"}`}>{v.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
           <label className="block">
             <Label>Agent / Field Staff</Label>
             <div className="flex min-h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700">
@@ -123,7 +153,8 @@ export default function LeadForm({ lead, readOnly = false, onSubmit, onCancel })
           </label>
         </div>
       </fieldset>
-      {lead && !readOnly && (
+      {/* Lead decisions (call back, visit, document given, lost) are taken in Call Tracker. Only a lost lead can still be reopened here. */}
+      {lead && !readOnly && lead.status === "lost" && (
         <fieldset>
           <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Lead decision</legend>
           <div className="grid gap-4 sm:grid-cols-2">

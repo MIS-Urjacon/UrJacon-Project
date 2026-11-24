@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
-import { Avatar, DateCell, Pill } from "@/components/ui";
+import { DateCell, Pill } from "@/components/ui";
 
 const PAGE_SIZE = 10;
 const th = "px-3 py-3 align-bottom text-[11px] font-semibold uppercase leading-tight tracking-wider";
@@ -107,7 +107,6 @@ export default function AssignWorkPage() {
                   <td className={td}><DateCell value={r.assignedAt} /></td>
                   <td className={td}>
                     <div className="flex items-center gap-3">
-                      <Avatar name={r.customerName || r.recordId} />
                       <div><div className="font-semibold text-slate-800">{r.customerName || "-"}</div><div className="text-xs text-slate-400">{r.recordId}</div></div>
                     </div>
                   </td>

@@ -337,6 +337,7 @@ function LeadDetails({ row, pick }) {
     ["Payment Mode (lead)", pick("paymentMode") || pick("preferredPaymentMode")],
     ["Lead Source", pick("leadSource") ?? pick("source")],
     ["Dealer", pick("dealer")],
+    ["Liaisoning", pick("liaisoning")],
     ["Branch / Route", [pick("branch"), pick("route")].filter(Boolean).join(" / ")],
     ["Mobile", pick("mobile")],
     ["Email", pick("email")],

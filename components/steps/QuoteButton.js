@@ -5,12 +5,22 @@ import { FileText, X } from "lucide-react";
 import QuotationSummary from "@/components/leads/QuotationSummary";
 
 // Compact quotation icon for step popups; the full quotation opens only when clicked.
-export default function QuoteButton({ row, title = "Quotation Received from Lead Management", compact = false }) {
+export default function QuoteButton({ row, title = "Quotation Received from Lead Management", compact = false, iconOnly = false }) {
   const [open, setOpen] = useState(false);
   if (!row.quotationReference) return null;
   return (
     <>
-      {compact ? (
+      {iconOnly ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title={`View quotation ${row.quotationReference}`}
+          aria-label="View quotation"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-100 bg-brand-50 text-brand-dark transition hover:bg-brand-100"
+        >
+          <FileText size={17} />
+        </button>
+      ) : compact ? (
         <button
           type="button"
           onClick={() => setOpen(true)}

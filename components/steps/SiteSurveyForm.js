@@ -30,7 +30,7 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
     setErr("");
     const unanswered = SURVEY_CHOICES.find((q) => q.required && !f[q.key]);
     if (unanswered) return setErr(`Select ${unanswered.label}`);
-    if (f.photoPdf.length === 0) return setErr("Upload the survey photo PDF");
+    if (f.photoPdf.length === 0) return setErr("Upload the survey photos (PDF or images)");
     setSaving(true);
     const msg = await onSubmit(f);
     setSaving(false);
@@ -105,7 +105,7 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
 
       <fieldset disabled={readOnly}>
         <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Photo checklist &amp; remarks</legend>
-        <p className="mb-3 text-sm text-slate-500">Take clear photos of each item during the survey and make one PDF of them. Tick each photo that was taken, then upload the PDF and share it with Manoj Bhoi or Sameer.</p>
+        <p className="mb-3 text-sm text-slate-500">Take clear photos of each item during the survey and make one PDF of them (or upload the photos as images). Tick each photo that was taken, then upload the file(s) and share them with Manoj Bhoi or Sameer.</p>
         <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
           {SURVEY_PHOTOS.map((item) => (
             <label key={item} className="flex items-center gap-2 text-sm text-slate-700">
@@ -116,9 +116,9 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <Label required>Survey Photo PDF</Label>
-            <FileUpload files={f.photoPdf} onChange={(files) => set("photoPdf", files)} max={1} readOnly={readOnly} compact />
-            <p className="mt-1 text-xs text-slate-400">1 PDF file, up to 5 MB.</p>
+            <Label required>Survey Photos (PDF / images)</Label>
+            <FileUpload files={f.photoPdf} onChange={(files) => set("photoPdf", files)} max={5} readOnly={readOnly} compact />
+            <p className="mt-1 text-xs text-slate-400">One PDF or up to 5 images (JPG, PNG, WEBP), each up to 5 MB.</p>
           </div>
           <label className="block sm:col-span-2"><Label required>Surveyor Remarks</Label><textarea rows={3} className="field !h-auto py-2.5" required value={f.surveyorRemarks} onChange={(e) => set("surveyorRemarks", e.target.value)} /></label>
         </div>

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import DropSelect from "@/components/Select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import Modal from "@/components/Modal";
-import { Button, Pill, Toast } from "@/components/ui";
+import { Avatar, Button, Pill, Toast } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
 import { useMe } from "@/lib/useMe";
 import { ROLE_LABEL, GRANTABLE_PAGES, defaultPages } from "@/lib/access";
@@ -125,6 +125,7 @@ export default function UsersTab() {
                 </td>
                 <td className={td}>
                   <div className="flex items-center gap-3">
+                    <Avatar name={u.name} />
                     <div className="font-semibold text-slate-800">
                       {u.name}
                       {u.id === me?.id && <span className="ml-2 text-xs font-medium text-slate-400">(you)</span>}

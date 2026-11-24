@@ -77,6 +77,9 @@ complete rule/hold/role/document glossary is visible in the app at
 - **Call Tracker is not linked to Quotation.** Responses: Call back later, Visit required, **Document given**
   (the lead goes straight to Document Receive; no quotation, product code or kW needed), Not interested. No
   quotation pill / button there.
+- **Call Tracker shows a quotation icon once a quotation was sent** (read only): the **Quotation** column has just an icon that
+  opens the latest quotation (its Sent status is inside the popup); nothing is shown for a lead that has no sent quotation. It never moves
+  the lead or changes the response options. The Call Tracker popup shows the same status ("Quotation sent (R1)" or "Quotation not sent", the sent date and the icon).
 - **Quotation is standalone** (`/quotation`): choose a BP SC Number, fill the 11-page proposal (UrjaCon Proposal
   Studio format: `components/leads/ProposalBuilder.js` + `ProposalFrame.js`, engine in `lib/proposal/engine.js`),
   Submit sends it. It never changes the lead's stage, outcome or follow-ups. BP SC Number is mandatory for a new lead
@@ -100,7 +103,7 @@ complete rule/hold/role/document glossary is visible in the app at
   Category, Meter Type), Roof evaluation (type, mounting, structure size, orientation, Cement/Gitti/Balu, condition,
   age, usable area, shading, access), Cable distances (panel-inverter, inverter-DB, ventilation, earthing, Wi-Fi/LAN),
   Site logistics (vehicle access, ladder, storage, obstacles, tentative install date) and the Photo checklist with a
-  required survey photo PDF (max 5 MB, the upload limit) and Surveyor Remarks. BP SC number, address, system, panels etc.
+  required survey photos (one PDF or up to 5 images, each max 5 MB, the upload limit) and Surveyor Remarks. BP SC number, address, system, panels etc.
   are not asked again: they are in the "Important details" block.
 
 - **No Status dropdown in Loan, Cash, Installation and Closure popups.** Submitting the popup completes the step
@@ -123,6 +126,34 @@ complete rule/hold/role/document glossary is visible in the app at
   DecompressionStream; old .xls is not supported). Each BP SC number is matched with the cases and shown as Logged in /
   Not logged in / Not in the system, with the system's own login status and a Check column, plus the cases pending at Login that
   the file does not mention. It only reads the file; no case is changed.
+
+- **Short choice lists are tick boxes, long ones stay dropdowns.** The shared `components/Select.js` (`DropSelect`, used by every
+  popup form) shows a field with 2 to 4 options as round **radio buttons** (one answer only; real checkboxes stay square) and keeps
+  the dropdown for 5 or more options or a single option. Pass `variant="dropdown"` to keep a dropdown whatever the number
+  (the BP SC Number picker on Quotation does).
+
+- **Lead form: Live Location comes before Village, and fills it.** After **Capture Live Location** the page calls
+  `GET /api/village?lat&lng` (`app/api/village/route.js`). The village the point is in comes from Google Geocoding when
+  `GOOGLE_MAPS_API_KEY` is set (same names as Google Maps), otherwise from OpenStreetMap Nominatim (no key). VoiceOfVillage
+  (`VILLAGE_API_KEY`, Bearer token) only adds villages within 5 km: its list holds just villages that have coordinates, so for
+  a point inside a town it returned villages 17 km away. The first result fills Village (editable), the rest are "Nearby" chips.
+  Keys stay on the server; if nothing is found the user types the village.
+
+- **Call Tracker has a Planned Date column** (`app/call-tracker/page.js`): it is the lead's next follow-up (the created date for a new lead), so it moves whenever the follow-up date changes.
+
+- **Call Tracker "Document given" has no document tick boxes** (Aadhaar, PAN, ...): Document Receive receives and checks them. The handover only asks BP SC Number, Branch, Dealer, Liaisoning, Route (+ Ownership Document for Odisha), state and email.
+
+- **Quotation without a BP SC Number (new client).** The Quotation page has two choices: **Lead with BP SC Number** (as before) and **New client (no BP SC Number)**. The second one opens the same proposal builder with nothing chosen; customer name, mobile and address are typed in the proposal, and Submit calls `POST /api/leads/quick-quotation`, which keeps the record with `status: "quotation"` (source "Direct quotation") and then sends it like any quotation. Because its status is not `open`, it never shows in Leads, Call Tracker, Dashboard or Reports; it appears only in Quotation > History, where View and Revise work as usual (the send, revise and update routes accept status `quotation`). Mobile is optional for it.
+
+- Call Tracker's "Document given" **Branch, Dealer, Liaisoning and Route are real dropdowns** (System Masters lists, `Pick` in `components/leads/DocumentPacket.js`); the Document Receive popup's Lead details also shows **Liaisoning**.
+
+- A Document Receive case saved with a document correction shows the status **Need correction** (red) instead of "On hold"; other pages keep "On hold".
+
+- The **Assign work** popup has a search box (name or role) above the employee list.
+
+- **Lead decisions are taken in Call Tracker.** The Update popup on the Leads page only edits the lead's details (no Keep active /
+  Mark as lost). Marking a lead lost is Call Tracker's "Not interested". The one exception is a lost lead, whose Update popup still
+  offers **Reopen lead**.
 
 ### Lead management (before the case process)
 

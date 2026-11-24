@@ -6,6 +6,7 @@ import { History, MapPin } from "lucide-react";
 import { Avatar, Pill } from "@/components/ui";
 import { FormActions, Label } from "@/components/steps/shared";
 import { visitHistory } from "@/lib/leadConstants";
+import QuoteButton from "@/components/steps/QuoteButton";
 import DocumentPacket, { validatePacket } from "@/components/leads/DocumentPacket";
 
 const LEAD_TEMPERATURES = ["Interested", "Not Interested", "Follow up Required"];
@@ -24,6 +25,8 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
   const [remark, setRemark] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const quotationSent = row.quotationStatus === "sent";
+  const revision = Number(row.quotationRevision) > 0 ? ` (R${row.quotationRevision})` : "";
   const [packet, setPacket] = useState(() => ({ ...row, documents: { ...(row.documents ?? {}) } }));
   const [masters, setMasters] = useState({});
   const setField = (key, value) => setPacket((current) => ({ ...current, [key]: value }));
@@ -85,12 +88,16 @@ export default function CallTrackerForm({ row, onComplete, onCancel }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {row.temperature && <Pill color={TEMPERATURE_COLOR[row.temperature]}>{row.temperature}</Pill>}
+            {/* Quotation status (read only): once sent, the icon opens the quotation. */}
+            {quotationSent ? <Pill color="green">Quotation sent{revision}</Pill> : <Pill color="gray">Quotation not sent</Pill>}
+            {quotationSent && <QuoteButton iconOnly row={row} title={revision ? `Latest Quotation${revision}` : "Quotation sent"} />}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-slate-100 px-5 py-3 text-sm">
           <Item label="BP SC Number" value={row.bpScNumber} mono />
           <Item label="System" value={row.kwWanted ? `${row.kwWanted} kW` : ""} />
           <Item label="Next Follow-up" value={row.nextFollowUp ? <InlineDate value={row.nextFollowUp} /> : ""} />
+          <Item label="Quotation" value={quotationSent ? <>Sent{revision}{row.quotationSentAt ? <> · <InlineDate value={row.quotationSentAt} /></> : null}</> : "Not sent"} />
           <Item label="Last Outcome" value={row.outcome || "No interaction yet"} />
           {row.visitBy && <Item label="Visit By" value={row.visitBy} />}
         </div>

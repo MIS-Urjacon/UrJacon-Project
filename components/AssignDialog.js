@@ -11,6 +11,7 @@ export default function AssignDialog({ open, type, page, ids, current = [], onCl
   const [selected, setSelected] = useState(current);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [q, setQ] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -19,6 +20,7 @@ export default function AssignDialog({ open, type, page, ids, current = [], onCl
       .then((list) => {
         setSelected(current);
         setError("");
+        setQ("");
         setUsers(list);
       })
       .catch(() => {});
@@ -57,8 +59,9 @@ export default function AssignDialog({ open, type, page, ids, current = [], onCl
             <button type="button" onClick={() => setSelected([])} className="hover:underline">Clear</button>
           </div>
         </div>
+        <input className="field" type="search" placeholder="Search employee name or role..." value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="max-h-64 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
-          {users.map((u) => (
+          {users.filter((u) => `${u.name} ${ROLE_LABEL[u.role] ?? u.role}`.toLowerCase().includes(q.trim().toLowerCase())).map((u) => (
             <label key={u.id} className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
               <input
                 type="checkbox"

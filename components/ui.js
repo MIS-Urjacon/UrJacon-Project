@@ -96,7 +96,6 @@ export function DateCell({ value }) {
 export function CustomerCell({ row }) {
   return (
     <div className="flex items-center gap-3">
-      <Avatar name={row.customerName} />
       <div>
         <div className="font-semibold text-slate-800">{row.customerName}</div>
         <div className="text-xs text-slate-400">{row.id}</div>

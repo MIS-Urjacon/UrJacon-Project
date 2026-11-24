@@ -11,11 +11,12 @@ export async function PUT(request, { params }) {
   const { id } = await params;
   const body = await request.json();
   const input = cleanLeadInput(body);
-  const error = validateLead(input);
-  if (error) return NextResponse.json({ error }, { status: 400 });
-
   const current = await getLead(id);
   if (!current || !(await canSeeRecord(guard.user, current))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  // A direct quotation (no BP SC Number) may have no mobile number.
+  const direct = current.status === "quotation";
+  const error = validateLead(direct ? { ...input, mobile: input.mobile || "0000000000" } : input);
+  if (error) return NextResponse.json({ error }, { status: 400 });
   if (current.status === "converted") {
     return NextResponse.json({ error: "Converted leads cannot be edited" }, { status: 409 });
   }
@@ -53,7 +54,7 @@ export async function PUT(request, { params }) {
     ...input,
     // The staff owner is assigned at creation from the authenticated session.
     agent: current.agent || user?.name || "Unknown",
-    status: action === "lost" ? "lost" : "open",
+    status: direct ? "quotation" : action === "lost" ? "lost" : "open",
     lostReason: action === "lost" ? lostReason : "",
     updatedAt: now,
     updatedBy: user?.name ?? "Unknown",

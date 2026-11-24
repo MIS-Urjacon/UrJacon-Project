@@ -3,10 +3,15 @@ import { useCallback } from "react";
 import LeadPipelinePage from "@/components/leads/LeadPipelinePage";
 import CallTrackerForm from "@/components/leads/CallTrackerForm";
 import { visitHistory } from "@/lib/leadConstants";
+import QuoteButton from "@/components/steps/QuoteButton";
+import { DateCell } from "@/components/ui";
 
 const two = (top, bottom) => <div className="leading-tight"><div className="text-slate-700">{top || "-"}</div><div className="text-xs text-slate-400">{bottom || "-"}</div></div>;
 const EXTRA_COLUMNS = [
   { key: "bp", label: "BP SC Number", render: (lead) => <span className="font-mono text-[13px] font-medium text-slate-700">{lead.bpScNumber || "-"}</span> },
+  // Planned Date follows the next follow-up: when the follow-up date changes, this changes with it (a new lead: its created date).
+  { key: "planned", label: "Planned Date", render: (lead) => <DateCell value={lead.nextFollowUp || lead.timestamp} /> },
+  { key: "quotation", label: "Quotation", render: (lead) => <QuotationCell lead={lead} /> },
   { key: "location", label: "Village / State", render: (lead) => two(lead.village, lead.state) },
   { key: "product", label: "Brand / Product", render: (lead) => two(lead.brand, [lead.productInterested, lead.pricing].filter(Boolean).join(" · ")) },
   { key: "remark", label: "Remark / Last Outcome", render: (lead) => <div className="max-w-[200px] leading-tight"><div className="truncate text-slate-700" title={lead.remark}>{lead.remark || "-"}</div><div className="text-xs text-slate-400">{lead.outcome || "-"}</div></div> },
@@ -14,6 +19,14 @@ const EXTRA_COLUMNS = [
 ];
 
 const shortDate = (value) => (value ? new Date(value).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
+
+// Only the quotation icon, and only once the quotation was sent: it opens the quotation (the Sent status is shown
+// inside the popup). Nothing else in Call Tracker depends on it.
+function QuotationCell({ lead }) {
+  if (lead.quotationStatus !== "sent") return null;
+  const revision = Number(lead.quotationRevision) > 0 ? ` (R${lead.quotationRevision})` : "";
+  return <QuoteButton iconOnly row={lead} title={revision ? `Latest Quotation${revision}` : "Quotation sent"} />;
+}
 
 // Who is going for the visit now (or went last), with the number of visits so far.
 function VisitCell({ lead }) {

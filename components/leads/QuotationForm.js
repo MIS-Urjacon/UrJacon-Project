@@ -11,7 +11,7 @@ import { initialProposal, leadFieldsFrom } from "@/lib/proposal/lead";
 import { compute } from "@/lib/proposal/engine";
 import { defaultPaymentTerms } from "@/lib/quotationFormat";
 
-export default function QuotationForm({ row, onComplete, onRefresh, onCancel, readOnly = false, idle = false, revising = false }) {
+export default function QuotationForm({ row, onComplete, onRefresh, onCancel, readOnly = false, idle = false, revising = false, walkIn = false }) {
   const [form, setForm] = useState(() => ({
     quotationRevision: 0,
     quotationValidityDays: 15,
@@ -37,6 +37,9 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [revisionReason, setRevisionReason] = useState("");
+  // A direct quotation (no BP SC Number): the record is created on Submit, from the customer typed in the proposal.
+  const createdId = useRef("");
+  const leadId = row.id || createdId.current;
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   function validateForSend() {
@@ -58,10 +61,11 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
     if (revising && !revisionReason.trim()) return setError("Enter the reason for this revision");
     setSaving(true);
     const now = new Date().toISOString();
+    const who = walkIn ? { customerName: proposal.state.cust.trim(), mobile: (proposal.state.phone ?? "").trim(), address: proposal.state.addr ?? "", state: proposal.state.region ?? "" } : {};
     // Revision: the sent version is archived first (R1, R2, ...), then the corrected one is sent.
     let revision = {};
     if (revising) {
-      const response = await fetch(`/api/leads/${row.id}/revise-quotation`, {
+      const response = await fetch(`/api/leads/${leadId}/revise-quotation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: revisionReason }),
@@ -74,29 +78,31 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
         quotationSentAt: "", quotationSentBy: "", quotationChannel: "",
       };
     }
-    const update = await fetch(`/api/leads/${row.id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        ...revision,
-        ...leadFieldsFrom(proposal.state, proposal.media, form),
-        paymentMode: form.paymentMode,
-        action: "save",
-        quotationStatus: "draft",
-        quotationCreatedAt: revision.quotationCreatedAt || form.quotationCreatedAt || now,
-      }),
+    const body = JSON.stringify({
+      ...form,
+      ...revision,
+      ...leadFieldsFrom(proposal.state, proposal.media, form),
+      ...who,
+      paymentMode: form.paymentMode,
+      action: "save",
+      quotationStatus: "draft",
+      quotationCreatedAt: revision.quotationCreatedAt || form.quotationCreatedAt || now,
     });
+    const update = leadId
+      ? await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body })
+      : await fetch("/api/leads/quick-quotation", { method: "POST", headers: { "Content-Type": "application/json" }, body });
     const updated = await update.json();
     if (!update.ok) { setSaving(false); return setError(updated.error ?? "Could not save the quotation"); }
+    createdId.current = updated.id;
     if (mode === "draft") {
       setSaving(false);
       setForm(updated);
-      setNotice(`Quotation draft saved for ${row.id}.`);
+      setNotice(`Quotation draft saved for ${updated.id}.`);
       onRefresh?.();
       return;
     }
 
-    const send = await fetch(`/api/leads/${row.id}/send-quotation`, { method: "POST" });
+    const send = await fetch(`/api/leads/${updated.id}/send-quotation`, { method: "POST" });
     const result = await send.json();
     setSaving(false);
     if (!send.ok) return setError(result.error ?? "Could not mark the quotation as sent");
@@ -109,7 +115,7 @@ export default function QuotationForm({ row, onComplete, onRefresh, onCancel, re
     return <div className="space-y-5"><QuotationSummary quotation={form} title="Latest Quotation" /><RevisionHistory revisions={form.quotationRevisions} currentRevision={form.quotationRevision} /><div className="flex justify-end"><Button variant="ghost" type="button" onClick={onCancel}>Close</Button></div></div>;
   }
 
-  const modeOptions = form.state === "Odisha" ? ["Cash", "Loan", "Subsidy Cheque"] : ["Cash", "Loan"];
+  const modeOptions = (walkIn ? proposal.state.region : form.state) === "Odisha" ? ["Cash", "Loan", "Subsidy Cheque"] : ["Cash", "Loan"];
   const changeMode = (mode) => setForm((current) => ({
     ...current,
     paymentMode: mode,

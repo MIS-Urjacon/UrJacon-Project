@@ -14,7 +14,7 @@ export async function POST(_request, { params }) {
   const { id } = await params;
   const lead = await getLead(id);
   if (!lead || !(await canSeeRecord(guard.user, lead))) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-  if (lead.status !== "open") {
+  if (lead.status !== "open" && lead.status !== "quotation") {
     return NextResponse.json({ error: "Only an open lead can be sent a quotation" }, { status: 409 });
   }
   if (!lead.quotationReference) {

@@ -311,7 +311,7 @@ export default function StepPage({
                         {tab === "history" ? (
                           <Pill color="green">Completed</Pill>
                         ) : e?.status === "hold" ? (
-                          <Pill color="red">On hold</Pill>
+                          <Pill color="red">{stepKey === "documentReceive" ? "Need correction" : "On hold"}</Pill>
                         ) : (
                           <Pill color="amber">Pending</Pill>
                         )}

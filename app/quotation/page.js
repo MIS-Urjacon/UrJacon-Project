@@ -37,6 +37,6 @@ export default function QuotationPage() {
   const filter = useCallback((row) => row.status === "open" && row.quotationStatus !== "sent" && Boolean(row.bpScNumber), []);
   const historyFilter = useCallback((row) => Boolean(row.quotationStatus && row.quotationCreatedAt), []);
   // An open lead whose quotation is sent can be revised (History > Revise opens it in Pending).
-  const canRevise = useCallback((row) => row.status === "open" && row.quotationStatus === "sent", []);
+  const canRevise = useCallback((row) => (row.status === "open" || row.status === "quotation") && row.quotationStatus === "sent", []);
   return <LeadPipelinePage title="Quotation & Documents" subtitle="Step 3 · Choose a BP SC Number to fill the quotation with that lead's details, then Submit to send it to the customer. To correct a sent one, use Revise in History. A quotation is separate from Call Tracker: it does not move the lead, and the price of the case is set at Document Receive." filter={filter} historyFilter={historyFilter} historyColumns={HISTORY_COLUMNS} Form={QuotationForm} PendingView={QuotationWorkspace} canRevise={canRevise} modalTitle="Create, send and track quotation" />;
 }

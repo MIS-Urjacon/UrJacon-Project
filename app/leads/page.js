@@ -6,7 +6,7 @@ import LeadForm from "@/components/leads/LeadForm";
 import Modal from "@/components/Modal";
 import { BulkAssign, RowBox, SelectAllBox, useCanAssign, useSelection } from "@/components/BulkAssign";
 import AssigneeCell from "@/components/AssigneeCell";
-import { Avatar, Button, DateCell, Pill, Toast } from "@/components/ui";
+import { Button, DateCell, Pill, Toast } from "@/components/ui";
 import { leadStageLabel } from "@/lib/leadConstants";
 
 const TABS = [["open", "Open"], ["converted", "Converted"], ["lost", "Lost"]];
@@ -146,9 +146,9 @@ export default function LeadsPage() {
                 <tr key={lead.id} className="hover:bg-slate-50/70">
                   <td className="border-t border-slate-100 px-3 py-3 text-center"><div className="flex items-center justify-center gap-2.5">{canBulk && lead.status === "open" && <RowBox sel={sel} row={lead} />}<button onClick={() => setModal(lead)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-xs font-semibold text-white hover:bg-brand-dark"><ClipboardCheck size={13} />{lead.status === "converted" ? "View" : "Update"}</button></div></td>
                   <td className="border-t border-slate-100 px-3 py-3"><DateCell value={lead.timestamp} /></td>
-                  <td className="border-t border-slate-100 px-3 py-3"><div className="flex items-center gap-3"><Avatar name={lead.customerName} /><div><div className="font-semibold text-slate-800">{lead.customerName}</div><div className="text-xs text-slate-400">{lead.id} · {lead.mobile}</div></div></div></td>
+                  <td className="border-t border-slate-100 px-3 py-3"><div className="flex items-center gap-3"><div><div className="font-semibold text-slate-800">{lead.customerName}</div><div className="text-xs text-slate-400">{lead.id} · {lead.mobile}</div></div></div></td>
                   <td className="border-t border-slate-100 px-3 py-3 text-slate-600"><div>{lead.source}</div><div className="text-xs text-slate-400">{lead.agent || "-"}</div></td>
-                  <td className="border-t border-slate-100 px-3 py-3 text-slate-600"><div>{lead.kwWanted ? `${lead.kwWanted} kW` : "-"} · {lead.paymentMode || "Undecided"}</div><div className="text-xs text-slate-400">{lead.productCode || lead.village || "-"}</div></td>
+                  <td className="border-t border-slate-100 px-3 py-3 text-slate-600"><div>{lead.kwWanted ? `${lead.kwWanted} kW` : "-"}</div><div className="text-xs text-slate-400">{lead.productCode || lead.village || "-"}</div></td>
                   <td className="border-t border-slate-100 px-3 py-3 text-slate-600">{lead.brand || "-"}</td>
                   <td className="border-t border-slate-100 px-3 py-3"><AssigneeCell row={lead} /></td>
                   <td className="border-t border-slate-100 px-3 py-3"><DateCell value={lead.nextFollowUp} /></td>
