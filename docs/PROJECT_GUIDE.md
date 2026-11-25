@@ -668,6 +668,14 @@ No other file should need to change. If it does, the structure is wrong.
   `*_json_old` tables once you have checked the data.
 - Still no concurrency safety for two people editing the same record at once.
 
+- **Relational schema (draft, not migrated, not used by the app yet).** `prisma/schema.prisma` (Prisma 7,
+  `prisma7.config.ts`, `DATABASE_URL`) is a simple version of the data with one table per page, named after the page
+  (`leads`, `call_tracker`, `quotations`, `document_receive`, `login_pmsg`, `site_survey`, `dispatch`, `warranty`, ...).
+  Every page table has `timestamp`, `planned_date`, `actual_date` (delay = actual - planned), `status`
+  (pending / done / hold), `hold_code`, `remark`, `submitted_by`. State and Payment Mode are masters like Branch and
+  Dealer (table `masters`); roles are only admin and user. The running app still uses the `urjacon_*` tables above, so
+  output is unchanged. Migrate to Supabase only after the owner approves the schema.
+
 ## 9. API
 
 | Method                    | Route                                 | Purpose                                                              |

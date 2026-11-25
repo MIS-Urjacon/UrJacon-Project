@@ -13,10 +13,16 @@ import { Pill, Toast, DateCell } from "@/components/ui";
 import IssueReportForm from "@/components/steps/IssueReportForm";
 import { BulkAssign, RowBox, SelectAllBox, useCanAssign, useSelection } from "@/components/BulkAssign";
 import AssigneeCell from "@/components/AssigneeCell";
+import { InlineFilters, matchesQuery, useTableFilters } from "@/components/TableFilters";
 import { STAGE_LABEL } from "@/lib/workflow";
 import { STEP_PAGE } from "@/lib/access";
 
 const PAGE_SIZE = 10;
+// Only data every step table shows: BP SC Number and Customer (Source / Brand are not columns on the case pages).
+const FILTER_DEFS = [
+  { key: "bp", label: "BP SC Number", get: (r) => r.bpScNumber },
+  { key: "customer", label: "Customer Name", get: (r) => r.customerName },
+];
 
 const th = "px-2 py-3 align-bottom text-[11px] font-semibold uppercase leading-tight tracking-wider";
 const td = "whitespace-nowrap border-t border-slate-100 px-2 py-3.5";
@@ -46,6 +52,8 @@ export default function StepPage({
   const [modal, setModal] = useState(null); // { row, readOnly }
   const [toast, setToast] = useState("");
   const [issueRows, setIssueRows] = useState(null); // cases whose issue is being reported (ticked rows)
+  const filterDefs = FILTER_DEFS;
+  const filters = useTableFilters(filterDefs, () => setPage(1));
 
   async function load() {
     setRows(await (await fetch("/api/cases", { cache: "no-store" })).json());
@@ -83,9 +91,8 @@ export default function StepPage({
   function r_sub(r) {
     return r.steps[stepKey].submittedAt;
   }
-  const list = (tab === "pending" ? pending : history).filter((r) =>
-    JSON.stringify(r).toLowerCase().includes(q.toLowerCase())
-  );
+  const tabRows = tab === "pending" ? pending : history;
+  const list = filters.apply(tabRows).filter((r) => matchesQuery(r, q));
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const cur = Math.min(page, pages);
   const shown = list.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
@@ -193,8 +200,8 @@ export default function StepPage({
           <extraTab.Component rows={rows} />
         ) : (
           <>
-        <div className="flex items-center justify-between gap-4 px-6 py-4">
-          <div className="flex h-10 w-full max-w-sm items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand focus-within:shadow-[0_0_0_3px_rgba(47,168,154,0.18)]">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4">
+          <div className="flex h-10 w-72 max-w-full shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand focus-within:shadow-[0_0_0_3px_rgba(47,168,154,0.18)]">
             <Search size={16} />
             <input
               placeholder="Search customer, BP SC number, village..."
@@ -206,6 +213,7 @@ export default function StepPage({
               className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             />
           </div>
+          <InlineFilters defs={filterDefs} rows={tabRows} filters={filters} />
           <div className="flex items-center gap-4">
             <div className="text-sm text-slate-400">
               {list.length} {list.length === 1 ? "case" : "cases"}
@@ -223,7 +231,6 @@ export default function StepPage({
             {canBulk && <BulkAssign type="case" page={assignmentPage} sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}
           </div>
         </div>
-
         <div className="overflow-x-auto border-t border-slate-100">
           <table className="w-full min-w-[900px] border-separate border-spacing-0 text-left text-[13px]">
             <thead>
@@ -326,10 +333,12 @@ export default function StepPage({
             <div className="flex flex-col items-center gap-2 py-16 text-slate-400">
               <Inbox size={32} />
               <div className="font-medium text-slate-600">
-                {tab === "pending" ? "No pending cases" : "No history yet"}
+                {filters.count || q ? "No matching cases" : tab === "pending" ? "No pending cases" : "No history yet"}
               </div>
               <div className="text-sm">
-                {tab === "pending"
+                {filters.count || q
+                  ? "Change or clear the search and filters."
+                  : tab === "pending"
                   ? "New cases appear here when the previous step is submitted."
                   : "Submitted cases will show up here."}
               </div>

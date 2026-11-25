@@ -3,6 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
 import { DateCell, Pill } from "@/components/ui";
+import { InlineFilters, matchesQuery, useTableFilters } from "@/components/TableFilters";
+
+const FILTERS = [
+  { key: "bp", label: "BP SC Number", get: (r) => r.bpScNumber },
+  { key: "customer", label: "Customer Name", get: (r) => r.customerName },
+];
 
 const PAGE_SIZE = 10;
 const th = "px-3 py-3 align-bottom text-[11px] font-semibold uppercase leading-tight tracking-wider";
@@ -19,6 +25,7 @@ export default function AssignWorkPage() {
   const [tab, setTab] = useState("active");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
+  const filters = useTableFilters(FILTERS, () => setPage(1));
 
   useEffect(() => {
     let active = true;
@@ -31,7 +38,8 @@ export default function AssignWorkPage() {
 
   const activeRows = useMemo(() => data.rows.filter((r) => r.status === "Active"), [data.rows]);
   const historyRows = useMemo(() => data.rows.filter((r) => r.status !== "Active"), [data.rows]);
-  const list = (tab === "active" ? activeRows : historyRows).filter((r) => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+  const tabRows = tab === "active" ? activeRows : historyRows;
+  const list = filters.apply(tabRows).filter((r) => matchesQuery(r, q));
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const cur = Math.min(page, pages);
   const shown = list.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
@@ -68,8 +76,8 @@ export default function AssignWorkPage() {
           ))}
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-6 py-4">
-          <div className="flex h-10 w-full max-w-sm items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand focus-within:shadow-[0_0_0_3px_rgba(47,168,154,0.18)]">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4">
+          <div className="flex h-10 w-72 max-w-full shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand focus-within:shadow-[0_0_0_3px_rgba(47,168,154,0.18)]">
             <Search size={16} />
             <input
               placeholder="Search customer, BP SC number, employee, page..."
@@ -78,9 +86,11 @@ export default function AssignWorkPage() {
               className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             />
           </div>
-          <div className="text-sm text-slate-400">{list.length} {list.length === 1 ? "assignment" : "assignments"}</div>
+          <InlineFilters defs={FILTERS} rows={tabRows} filters={filters} />
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-slate-400">{list.length} {list.length === 1 ? "assignment" : "assignments"}</div>
+          </div>
         </div>
-
         <div className="overflow-x-auto border-t border-slate-100">
           <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left text-[13px]">
             <thead>

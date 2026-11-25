@@ -8,6 +8,8 @@ import { BulkAssign, RowBox, SelectAllBox, useCanAssign, useSelection } from "@/
 import AssigneeCell from "@/components/AssigneeCell";
 import { Button, DateCell, Pill, Toast } from "@/components/ui";
 import { leadStageLabel } from "@/lib/leadConstants";
+import { InlineFilters, matchesQuery, useTableFilters } from "@/components/TableFilters";
+import { LEAD_FILTERS } from "@/components/leadFilters";
 
 const TABS = [["open", "Open"], ["converted", "Converted"], ["lost", "Lost"]];
 const TEMPERATURE_COLOR = { Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
@@ -22,6 +24,7 @@ export default function LeadsPage() {
   const [modal, setModal] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const filters = useTableFilters(LEAD_FILTERS, () => setPage(1));
 
   async function load() {
     const response = await fetch("/api/leads", { cache: "no-store" });
@@ -52,13 +55,16 @@ export default function LeadsPage() {
     ])),
     [rows]
   );
+  const tabRows = useMemo(
+    () => rows.filter((row) => row.status === tab).filter((row) => tab !== "open" || row.leadStage === "new"),
+    [rows, tab]
+  );
   const filtered = useMemo(
-    () => rows
-      .filter((row) => row.status === tab)
-      .filter((row) => tab !== "open" || row.leadStage === "new")
-      .filter((row) => JSON.stringify(row).toLowerCase().includes(query.toLowerCase()))
+    () => filters.apply(tabRows)
+      .filter((row) => matchesQuery(row, query))
       .sort((a, b) => (b.updatedAt ?? b.timestamp).localeCompare(a.updatedAt ?? a.timestamp)),
-    [rows, tab, query]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tabRows, query, filters.values]
   );
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
@@ -127,14 +133,14 @@ export default function LeadsPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center justify-between gap-4 px-6 py-4">
-          <div className="flex h-10 w-full max-w-sm items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4">
+          <div className="flex h-10 w-72 max-w-full shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand">
             <Search size={16} />
             <input className="w-full bg-transparent text-sm text-slate-700 outline-none" placeholder="Search name, mobile, village, lead ID..." value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
           </div>
+          <InlineFilters defs={LEAD_FILTERS} rows={tabRows} filters={filters} />
           <div className="flex items-center gap-4"><div className="text-sm text-slate-400">{filtered.length} {filtered.length === 1 ? "lead" : "leads"}</div>{canBulk && <BulkAssign type="lead" page="leads" sel={sel} onDone={(message) => { sel.clear(); notify(message); load(); }} />}</div>
         </div>
-
         <div className="overflow-x-auto border-t border-slate-100">
           <table className="w-full min-w-[1100px] text-left text-[13px]">
             <thead><tr className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -158,7 +164,7 @@ export default function LeadsPage() {
               ))}
             </tbody>
           </table>
-          {!loading && shown.length === 0 && <div className="flex flex-col items-center gap-2 py-16 text-slate-400"><Inbox size={32} /><div className="font-medium text-slate-600">No {tab} leads</div><div className="text-sm">{tab === "open" ? "Add a lead to start the pipeline." : `No leads have been ${tab} yet.`}</div></div>}
+          {!loading && shown.length === 0 && <div className="flex flex-col items-center gap-2 py-16 text-slate-400"><Inbox size={32} /><div className="font-medium text-slate-600">{filters.count || query ? "No matching leads" : `No ${tab} leads`}</div><div className="text-sm">{filters.count || query ? "Change or clear the search and filters." : tab === "open" ? "Add a lead to start the pipeline." : `No leads have been ${tab} yet.`}</div></div>}
         </div>
         <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3.5 text-sm text-slate-500">
           <div>{filtered.length === 0 ? "No results" : `Showing ${(currentPage - 1) * PAGE_SIZE + 1}-${Math.min(currentPage * PAGE_SIZE, filtered.length)} of ${filtered.length}`}</div>

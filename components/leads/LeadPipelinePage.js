@@ -10,6 +10,8 @@ import { useMe } from "@/lib/useMe";
 import { canAssign, canManagePageAssignment, assigneeIdsForPage } from "@/lib/assign";
 import { DateCell, Pill, Toast } from "@/components/ui";
 import { leadStageLabel } from "@/lib/leadConstants";
+import { InlineFilters, matchesQuery, useTableFilters } from "@/components/TableFilters";
+import { pipelineFilters } from "@/components/leadFilters";
 
 const TEMPERATURE_COLOR = { Interested: "green", "Not Interested": "red", "Follow up Required": "amber" };
 const EMPTY_COLUMNS = [];
@@ -23,6 +25,8 @@ export default function LeadPipelinePage({ title, subtitle, pageSlug, filter, Fo
   const [revising, setRevising] = useState(null); // History > Revise: lead opened in Pending for correction
   const [toast, setToast] = useState("");
   const [tab, setTab] = useState("pending");
+  const filterDefs = useMemo(() => pipelineFilters(tab === "history" ? [...extraColumns, ...historyColumns] : extraColumns), [tab, extraColumns, historyColumns]);
+  const filters = useTableFilters(filterDefs);
   const me = useMe();
   const canDelegate = canManagePageAssignment(me, assignmentPage);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -54,12 +58,14 @@ export default function LeadPipelinePage({ title, subtitle, pageSlug, filter, Fo
 
   const pendingRows = useMemo(() => rows.filter((row) => row.status === "open" && filter(row)), [rows, filter]);
   const historyRows = useMemo(() => historyFilter ? rows.filter(historyFilter) : [], [rows, historyFilter]);
-  const shown = useMemo(() => (tab === "history" ? historyRows : pendingRows)
-    .filter((row) => JSON.stringify(row).toLowerCase().includes(query.toLowerCase()))
+  const tabRows = tab === "history" ? historyRows : pendingRows;
+  const shown = useMemo(() => filters.apply(tabRows)
+    .filter((row) => matchesQuery(row, query))
     .sort((a, b) => tab === "history"
       ? (b.quotationCreatedAt || b.quotationSentAt || b.updatedAt || b.timestamp || "").localeCompare(a.quotationCreatedAt || a.quotationSentAt || a.updatedAt || a.timestamp || "")
       : (b.updatedAt || b.timestamp || "").localeCompare(a.updatedAt || a.timestamp || "")),
-  [historyRows, pendingRows, query, tab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [tabRows, query, filters.values, tab]);
 
   // Selected rows in table order. Submit opens them one after another.
   const selectedRows = checkable ? shown.filter((row) => selectedIds.includes(row.id)) : [];
@@ -114,10 +120,11 @@ export default function LeadPipelinePage({ title, subtitle, pageSlug, filter, Fo
           <button type="button" onClick={() => setTab("history")} className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${tab === "history" ? "border-brand text-brand-dark" : "border-transparent text-slate-400 hover:text-slate-600"}`}>History <span className="ml-1 text-xs">({historyRows.length})</span></button>
         </div>}
         {PendingView && tab === "pending" ? <PendingView rows={pendingRows} loading={loading} reload={load} revising={revising} clearRevising={() => setRevising(null)} notify={(message) => { setToast(message); setTimeout(() => setToast(""), 3500); }} /> : <>
-        <div className="flex items-center justify-between gap-4 px-6 py-4">
-          <div className="flex h-10 w-full max-w-sm items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4">
+          <div className="flex h-10 w-72 max-w-full shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-400 focus-within:border-brand">
             <Search size={16} /><input className="w-full bg-transparent text-sm text-slate-700 outline-none" placeholder="Search name, mobile, village, lead ID..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </div>
+          <InlineFilters defs={filterDefs} rows={tabRows} filters={filters} />
           <div className="flex items-center gap-4">
             <div className="text-sm text-slate-400">{shown.length} {tab === "history" ? "quotations" : "pending"}</div>
             {checkable && selectedRows.length > 0 && <button type="button" onClick={() => setIssueRows(selectedRows)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"><AlertTriangle size={15} />Report Issue{selectedRows.length > 1 ? ` (${selectedRows.length})` : ""}</button>}

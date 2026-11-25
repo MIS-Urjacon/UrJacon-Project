@@ -1,0 +1,1164 @@
+// Urjacon Process System: simple relational schema (PostgreSQL / Supabase).
+//
+// STATUS: DRAFT for owner approval. Not migrated yet; the running app still uses the urjacon_* tables
+// (supabase/schema.sql), so no output changes.
+//
+// Rules of this design
+//   * One table per page, named after the page (leads, call_tracker, quotations, document_receive, login_pmsg,
+//     site_survey, dispatch, warranty ...). Case pages hold one row per case.
+//   * Every page table has the same three date columns, so delay is one subtraction:
+//       timestamp    = when the work arrived at this page
+//       planned_date = timestamp + the page's TAT
+//       actual_date  = when the page was submitted (NULL while pending)
+//       delay        = actual_date - planned_date  (or now() - planned_date while still pending)
+//   * status = pending | done | hold. A row is created when the case arrives at the page (status pending),
+//     and filled when the page is submitted.
+//   * Dropdown answers are plain text. State, Payment Mode, Branch, Dealer, ... come from the masters table.
+//   * Uploaded files are stored as a JSON list [{ "url": "...", "name": "..." }] in the column that owns them.
+//   * Roles: only admin and user.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  admin
+  user
+}
+
+enum PageStatus {
+  pending
+  done
+  hold
+}
+
+// ======================================================== users and masters
+
+model User {
+  id           String   @id // U-0001
+  username     String   @unique
+  name         String   @default("")
+  role         Role     @default(user)
+  active       Boolean  @default(true)
+  pages        Json? // custom page access (list of page slugs); NULL = follow the role
+  passwordHash String   @map("password_hash") // salted scrypt, never plain text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  defaultPages PageDefaultAssignee[]
+  assignments  Assignment[]
+
+  @@map("users")
+}
+
+// Settings > System Masters. type = state, paymentMode, branch, dealer, liaisoning, productCode, bank,
+// responsiblePerson, installer, route, brand. Only the values the system already has are stored.
+model Master {
+  id        Int    @id @default(autoincrement())
+  type      String
+  value     String
+  sortOrder Int    @default(0) @map("sort_order")
+
+  @@unique([type, value])
+  @@map("masters")
+}
+
+// Settings > Assignees: who gets all new work that arrives on a page.
+model PageDefaultAssignee {
+  pageSlug String @map("page_slug")
+  userId   String @map("user_id")
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pageSlug, userId])
+  @@map("page_default_assignees")
+}
+
+// ======================================================== lead management
+
+// Leads page
+model Lead {
+  id          String    @id // L-0001
+  timestamp   DateTime  @default(now()) // created
+  plannedDate DateTime? @map("planned_date") // first follow-up due
+  actualDate  DateTime? @map("actual_date") // first contact done
+  status      String    @default("open") // open | lost | converted | quotation
+  leadStage   String    @default("new") @map("lead_stage")
+  lostReason  String    @default("") @map("lost_reason")
+  createdBy   String?   @map("created_by")
+  updatedBy   String?   @map("updated_by")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  customerName       String    @map("customer_name")
+  mobile             String
+  email              String    @default("")
+  address            String    @default("")
+  village            String    @default("")
+  state              String    @default("") // master: state
+  latitude           Decimal?  @db.Decimal(10, 7)
+  longitude          Decimal?  @db.Decimal(10, 7)
+  locationAccuracy   Decimal?  @map("location_accuracy") @db.Decimal(10, 2)
+  locationCapturedAt DateTime? @map("location_captured_at")
+
+  bpScNumber        String  @default("") @map("bp_sc_number")
+  source            String  @default("")
+  agent             String  @default("")
+  monthlyBill       Decimal @default(0) @map("monthly_bill") @db.Decimal(12, 2)
+  kwWanted          Decimal @default(0) @map("kw_wanted") @db.Decimal(8, 2)
+  productInterested String  @default("") @map("product_interested") // Hybrid / On-grid
+  pricing           String  @default("") // CL / ML
+  paymentMode       String  @default("") @map("payment_mode") // master: paymentMode
+  temperature       String  @default("Follow up Required")
+  outcome           String  @default("") // latest Call Tracker response
+  remark            String  @default("")
+  commission        Decimal @default(0) @db.Decimal(12, 2)
+  dealAmount        Decimal @default(0) @map("deal_amount") @db.Decimal(14, 2)
+  branch            String  @default("") // masters
+  dealer            String  @default("")
+  liaisoning        String  @default("")
+  route             String  @default("")
+  productCode       String  @default("") @map("product_code")
+  brand             String  @default("")
+  // handover packet ticks
+  docAadhaar        Boolean @default(false) @map("doc_aadhaar")
+  docPan            Boolean @default(false) @map("doc_pan")
+  docPassbook       Boolean @default(false) @map("doc_passbook")
+  docBill           Boolean @default(false) @map("doc_bill")
+  docTerracePhoto   Boolean @default(false) @map("doc_terrace_photo")
+  ownershipDocument Json?   @map("ownership_document")
+
+  calls       CallTracker[]
+  quotations  Quotation[]
+  case        Case?
+  assignments Assignment[]
+
+  @@index([mobile])
+  @@index([status])
+  @@index([bpScNumber])
+  @@map("leads")
+}
+
+// Call Tracker page: one row per call / visit / WhatsApp.
+// planned_date = the follow-up that was due, actual_date = when it was really done.
+model CallTracker {
+  id           Int       @id @default(autoincrement())
+  leadId       String    @map("lead_id")
+  timestamp    DateTime  @default(now())
+  plannedDate  DateTime? @map("planned_date")
+  actualDate   DateTime? @map("actual_date")
+  contactType  String    @default("") @map("contact_type") // Call / Visit / WhatsApp
+  response     String    @default("") // Call back later / Visit required / Document given / Not interested
+  nextFollowUp DateTime? @map("next_follow_up")
+  visitBy      String    @default("") @map("visit_by")
+  remark       String    @default("")
+  byUser       String    @default("") @map("by_user")
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("call_tracker")
+}
+
+// Quotation page: one row per version (revision 0, R1, R2 ...).
+model Quotation {
+  id             Int       @id @default(autoincrement())
+  leadId         String    @map("lead_id")
+  revision       Int       @default(0)
+  timestamp      DateTime  @default(now()) // created
+  plannedDate    DateTime? @map("planned_date")
+  actualDate     DateTime? @map("actual_date") // sent
+  status         String    @default("draft") // draft | sent
+  reference      String    @default("") // URJ/Q/26-27/0107
+  number         String    @default("") // reference + /R1
+  revisionReason String    @default("") @map("revision_reason")
+  sentBy         String?   @map("sent_by")
+  channel        String    @default("")
+  entity         String    @default("")
+  systemType     String    @default("") @map("system_type")
+  dcrType        String    @default("") @map("dcr_type")
+  gridType       String    @default("") @map("grid_type")
+  kwWanted       Decimal   @default(0) @map("kw_wanted") @db.Decimal(8, 2)
+  price          Decimal   @default(0) @db.Decimal(14, 2)
+  centralSubsidy Decimal   @default(0) @map("central_subsidy") @db.Decimal(14, 2)
+  stateSubsidy   Decimal   @default(0) @map("state_subsidy") @db.Decimal(14, 2)
+  panelCount     Int       @default(0) @map("panel_count")
+  panelWp        Int       @default(0) @map("panel_wp")
+  panelBrand     String    @default("") @map("panel_brand")
+  inverter       String    @default("")
+  meter          String    @default("")
+  included       String    @default("")
+  preparedBy     String    @default("") @map("prepared_by")
+  paymentMode    String    @default("") @map("payment_mode")
+  productCode    String    @default("") @map("product_code")
+  validityDays   Int       @default(15) @map("validity_days")
+  notes          String    @default("")
+  terms          String    @default("")
+  files          Json? // supporting files
+  proposal       Json? // UrjaCon Proposal Studio answers + map / design pictures
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, revision])
+  @@map("quotations")
+}
+
+// ======================================================== case
+
+// A confirmed lead (Call Tracker "Document given"). stage = the page the case is on now.
+model Case {
+  id              String   @id // C-0001
+  leadId          String?  @unique @map("lead_id")
+  timestamp       DateTime @default(now()) // created
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  workflowVersion Int      @default(3) @map("workflow_version")
+  stage           String   @default("documentReceive") // step key, or "done"
+
+  bpScNumber   String   @unique @map("bp_sc_number")
+  customerName String   @map("customer_name")
+  mobile       String   @default("")
+  email        String   @default("")
+  address      String   @default("")
+  village      String   @default("")
+  state        String   @default("") // master: state
+  latitude     Decimal? @db.Decimal(10, 7)
+  longitude    Decimal? @db.Decimal(10, 7)
+  leadSource   String   @default("") @map("lead_source")
+  fieldStaff   String   @default("") @map("field_staff")
+  commission   Decimal  @default(0) @db.Decimal(12, 2)
+
+  // price and system, set at Document Receive and read by every later step
+  dealAmount           Decimal @default(0) @map("deal_amount") @db.Decimal(14, 2)
+  kwWanted             Decimal @default(0) @map("kw_wanted") @db.Decimal(8, 2)
+  centralSubsidy       Decimal @default(0) @map("central_subsidy") @db.Decimal(14, 2)
+  stateSubsidy         Decimal @default(0) @map("state_subsidy") @db.Decimal(14, 2)
+  preferredPaymentMode String  @default("") @map("preferred_payment_mode") // master: paymentMode
+  branch               String  @default("")
+  dealer               String  @default("")
+  liaisoning           String  @default("")
+  route                String  @default("")
+  productCode          String  @default("") @map("product_code")
+  brand                String  @default("")
+  ownershipDocument    Json?   @map("ownership_document")
+
+  lead Lead? @relation(fields: [leadId], references: [id])
+
+  issues                   Issue[]
+  paymentSends             PaymentDetailsSent[]
+  assignments              Assignment[]
+  documentReceive          DocumentReceive?
+  documentVerification     DocumentVerification?
+  loginPmsg                LoginPmsg?
+  nameCorrection           NameCorrection?
+  ownerChange              OwnerChange?
+  agreement                Agreement?
+  siteSurvey               SiteSurvey?
+  paymentWorkStart         PaymentWorkStart?
+  jansamarth               Jansamarth?
+  bankFileReady            BankFileReady?
+  fileSubmission           FileSubmission?
+  loanIssueResolution      LoanIssueResolution?
+  firstInstallment         FirstInstallment?
+  receiveDp                ReceiveDp?
+  cashAskPayment           CashAskPayment?
+  cashPaymentReceived      CashPaymentReceived?
+  cashApproval             CashApproval?
+  subsidyChequeReady       SubsidyChequeReady?
+  cashReceipt              CashReceipt?
+  dispatch                 Dispatch?
+  cashDispatch             CashDispatch?
+  assignInstaller          AssignInstaller?
+  installationComplete     InstallationComplete?
+  billDcr                  BillDcr?
+  portalInstallation       PortalInstallation?
+  inspectionFile           InspectionFile?
+  meterInstallation        MeterInstallation?
+  jeInspection             JeInspection?
+  generationWifi           GenerationWifi?
+  portalInspectionApproval PortalInspectionApproval?
+  tariffCodeCheck          TariffCodeCheck?
+  finalBankFile            FinalBankFile?
+  finalBankPayment         FinalBankPayment?
+  subsidyRedeem            SubsidyRedeem?
+  subsidyDisbursal         SubsidyDisbursal?
+  chequeDeposit            ChequeDeposit?
+  balanceClearance         BalanceClearance?
+  warranty                 Warranty?
+
+  @@index([stage])
+  @@map("cases")
+}
+
+// "Send payment details to customer" log (Ask 90% Payment page)
+model PaymentDetailsSent {
+  id      Int      @id @default(autoincrement())
+  caseId  String   @map("case_id")
+  sentAt  DateTime @default(now()) @map("sent_at")
+  sentBy  String   @default("") @map("sent_by")
+  channel String   @default("whatsapp")
+  message String   @default("")
+  case    Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("payment_details_sent")
+}
+
+// Report Issue: sends the case back to Document Receive until it is resolved.
+model Issue {
+  id         Int       @id @default(autoincrement())
+  caseId     String    @map("case_id")
+  fromStep   String    @map("from_step") // step key the issue was reported from
+  issueType  String    @map("issue_type")
+  details    String    @default("")
+  status     String    @default("open") // open | resolved
+  reportedBy String    @default("") @map("reported_by")
+  reportedAt DateTime  @default(now()) @map("reported_at")
+  resolvedAt DateTime? @map("resolved_at")
+  files      Json?
+  case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, status])
+  @@map("issues")
+}
+
+// Assign Work page + the bell: one row per assignee per assignment (and per take-back).
+model Assignment {
+  id             String    @id @default(uuid())
+  recordType     String    @map("record_type") // lead | case
+  leadId         String?   @map("lead_id")
+  caseId         String?   @map("case_id")
+  page           String    @default("") // page slug
+  pageLabel      String    @default("") @map("page_label")
+  action         String    @default("assigned") // assigned | removed
+  kind           String    @default("temporary") // temporary (Assign button) | permanent (Settings)
+  active         Boolean   @default(true) // false once the work moved on or was taken back
+  assignedToId   String?   @map("assigned_to_id")
+  assignedToName String    @default("") @map("assigned_to_name")
+  assignedByName String    @default("") @map("assigned_by_name")
+  assignedOn     DateTime? @map("assigned_on") @db.Date
+  assignedAt     DateTime  @default(now()) @map("assigned_at")
+  seenAt         DateTime? @map("seen_at") // NULL = not read yet
+  lead           Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  case           Case?     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  assignedTo     User?     @relation(fields: [assignedToId], references: [id])
+
+  @@index([assignedToId, seenAt])
+  @@map("assignments")
+}
+
+// ======================================================== case pages (one table per page, one row per case)
+// Common columns: timestamp, planned_date, actual_date, status, hold_code, remark, submitted_by.
+// Page fields below are NULL until the page is submitted.
+
+// Document Receive: price, system, the 4 received documents, correction (step key: documentReceive)
+model DocumentReceive {
+  id                 Int        @id @default(autoincrement())
+  caseId             String     @unique @map("case_id")
+  timestamp          DateTime   @default(now())
+  plannedDate        DateTime?  @map("planned_date")
+  actualDate         DateTime?  @map("actual_date")
+  status             PageStatus @default(pending)
+  holdCode           String?    @map("hold_code") // H01..H22
+  remark             String?
+  submittedBy        String?    @map("submitted_by")
+  receivedThrough    String?    @map("received_through")
+  receivedDate       DateTime?  @map("received_date") @db.Date
+  systemType         String?    @map("system_type")
+  paymentMode        String?    @map("payment_mode")
+  systemSizeKw       Decimal?   @map("system_size_kw") @db.Decimal(14, 2)
+  systemPrice        Decimal?   @map("system_price") @db.Decimal(14, 2)
+  centralSubsidy     Decimal?   @map("central_subsidy") @db.Decimal(14, 2)
+  stateSubsidy       Decimal?   @map("state_subsidy") @db.Decimal(14, 2)
+  productCode        String?    @map("product_code")
+  panel              String?
+  brand              String?
+  aadhaarName        String?    @map("aadhaar_name")
+  aadhaarMatched     Boolean?   @map("aadhaar_matched")
+  aadhaarStatus      String?    @map("aadhaar_status")
+  aadhaarFiles       Json?      @map("aadhaar_files")
+  panName            String?    @map("pan_name")
+  panMatched         Boolean?   @map("pan_matched")
+  panStatus          String?    @map("pan_status")
+  panFiles           Json?      @map("pan_files")
+  passbookName       String?    @map("passbook_name")
+  passbookMatched    Boolean?   @map("passbook_matched")
+  passbookStatus     String?    @map("passbook_status")
+  passbookFiles      Json?      @map("passbook_files")
+  billName           String?    @map("bill_name")
+  billMatched        Boolean?   @map("bill_matched")
+  billStatus         String?    @map("bill_status")
+  billFiles          Json?      @map("bill_files")
+  terracePhotoFiles  Json?      @map("terrace_photo_files")
+  correctionType     String?    @map("correction_type")
+  correctionReason   String?    @map("correction_reason")
+  verificationResult String?    @map("verification_result")
+  case               Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("document_receive")
+}
+
+// Document Verification & Name Check: each document ticked Verified (step key: nameCheck)
+model DocumentVerification {
+  id               Int        @id @default(autoincrement())
+  caseId           String     @unique @map("case_id")
+  timestamp        DateTime   @default(now())
+  plannedDate      DateTime?  @map("planned_date")
+  actualDate       DateTime?  @map("actual_date")
+  status           PageStatus @default(pending)
+  holdCode         String?    @map("hold_code") // H01..H22
+  remark           String?
+  submittedBy      String?    @map("submitted_by")
+  aadhaarVerified  Boolean?   @map("aadhaar_verified")
+  panVerified      Boolean?   @map("pan_verified")
+  passbookVerified Boolean?   @map("passbook_verified")
+  billVerified     Boolean?   @map("bill_verified")
+  case             Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("document_verification")
+}
+
+// Login PMSG (step key: login)
+model LoginPmsg {
+  id            Int        @id @default(autoincrement())
+  caseId        String     @unique @map("case_id")
+  timestamp     DateTime   @default(now())
+  plannedDate   DateTime?  @map("planned_date")
+  actualDate    DateTime?  @map("actual_date")
+  status        PageStatus @default(pending)
+  holdCode      String?    @map("hold_code") // H01..H22
+  remark        String?
+  submittedBy   String?    @map("submitted_by")
+  loginCheck    String?    @map("login_check")
+  applicationNo String?    @map("application_no")
+  route         String?
+  retryDate     DateTime?  @map("retry_date") @db.Date
+  case          Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("login_pmsg")
+}
+
+// Name Correction (step key: nameCorrection)
+model NameCorrection {
+  id              Int        @id @default(autoincrement())
+  caseId          String     @unique @map("case_id")
+  timestamp       DateTime   @default(now())
+  plannedDate     DateTime?  @map("planned_date")
+  actualDate      DateTime?  @map("actual_date")
+  status          PageStatus @default(pending)
+  holdCode        String?    @map("hold_code") // H01..H22
+  remark          String?
+  submittedBy     String?    @map("submitted_by")
+  correctedName   String?    @map("corrected_name")
+  correctionFiles Json?      @map("correction_files")
+  case            Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("name_correction")
+}
+
+// Owner Change (step key: ownerChange)
+model OwnerChange {
+  id           Int        @id @default(autoincrement())
+  caseId       String     @unique @map("case_id")
+  timestamp    DateTime   @default(now())
+  plannedDate  DateTime?  @map("planned_date")
+  actualDate   DateTime?  @map("actual_date")
+  status       PageStatus @default(pending)
+  holdCode     String?    @map("hold_code") // H01..H22
+  remark       String?
+  submittedBy  String?    @map("submitted_by")
+  newOwnerName String?    @map("new_owner_name")
+  ownerFiles   Json?      @map("owner_files")
+  case         Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("owner_change")
+}
+
+// Consumer-Vendor Agreement (step key: agreementUpload)
+model Agreement {
+  id             Int        @id @default(autoincrement())
+  caseId         String     @unique @map("case_id")
+  timestamp      DateTime   @default(now())
+  plannedDate    DateTime?  @map("planned_date")
+  actualDate     DateTime?  @map("actual_date")
+  status         PageStatus @default(pending)
+  holdCode       String?    @map("hold_code") // H01..H22
+  remark         String?
+  submittedBy    String?    @map("submitted_by")
+  agreementDate  DateTime?  @map("agreement_date") @db.Date
+  stampAmount    Decimal?   @map("stamp_amount") @db.Decimal(14, 2)
+  agreementFiles Json?      @map("agreement_files")
+  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("agreement")
+}
+
+// Survey List (step key: siteSurvey)
+model SiteSurvey {
+  id                    Int        @id @default(autoincrement())
+  caseId                String     @unique @map("case_id")
+  timestamp             DateTime   @default(now())
+  plannedDate           DateTime?  @map("planned_date")
+  actualDate            DateTime?  @map("actual_date")
+  status                PageStatus @default(pending)
+  holdCode              String?    @map("hold_code") // H01..H22
+  remark                String?
+  submittedBy           String?    @map("submitted_by")
+  surveyDate            DateTime?  @map("survey_date") @db.Date
+  surveyorName          String?    @map("surveyor_name")
+  smartMeterPresent     String?    @map("smart_meter_present")
+  materialNeeded        String?    @map("material_needed")
+  phaseType             String?    @map("phase_type")
+  connectionCategory    String?    @map("connection_category")
+  meterType             String?    @map("meter_type")
+  roofType              String?    @map("roof_type")
+  mountingType          String?    @map("mounting_type")
+  structureSize         String?    @map("structure_size")
+  roofOrientation       String?    @map("roof_orientation")
+  roofCondition         String?    @map("roof_condition")
+  roofAge               Decimal?   @map("roof_age") @db.Decimal(14, 2)
+  usableArea            Decimal?   @map("usable_area") @db.Decimal(14, 2)
+  shading               String?
+  accessDetails         String?    @map("access_details")
+  materialsAvailable    Json?      @map("materials_available")
+  panelInverterDistance Decimal?   @map("panel_inverter_distance") @db.Decimal(14, 2)
+  inverterDbDistance    Decimal?   @map("inverter_db_distance") @db.Decimal(14, 2)
+  earthingDistance      Decimal?   @map("earthing_distance") @db.Decimal(14, 2)
+  ventilation           String?
+  wifiLan               String?    @map("wifi_lan")
+  vehicleAccess         String?    @map("vehicle_access")
+  ladderNeeded          String?    @map("ladder_needed")
+  storageAvailable      String?    @map("storage_available")
+  obstacles             String?
+  installationDate      DateTime?  @map("installation_date") @db.Date
+  photosTaken           Json?      @map("photos_taken")
+  photoFiles            Json?      @map("photo_files")
+  surveyorRemarks       String?    @map("surveyor_remarks")
+  case                  Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("site_survey")
+}
+
+// Payment Work Start (step key: paymentWorkStart)
+model PaymentWorkStart {
+  id          Int        @id @default(autoincrement())
+  caseId      String     @unique @map("case_id")
+  timestamp   DateTime   @default(now())
+  plannedDate DateTime?  @map("planned_date")
+  actualDate  DateTime?  @map("actual_date")
+  status      PageStatus @default(pending)
+  holdCode    String?    @map("hold_code") // H01..H22
+  remark      String?
+  submittedBy String?    @map("submitted_by")
+  paymentMode String?    @map("payment_mode")
+  corridor    String?
+  case        Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("payment_work_start")
+}
+
+// JanSamarth Application (step key: janSamarth)
+model Jansamarth {
+  id            Int        @id @default(autoincrement())
+  caseId        String     @unique @map("case_id")
+  timestamp     DateTime   @default(now())
+  plannedDate   DateTime?  @map("planned_date")
+  actualDate    DateTime?  @map("actual_date")
+  status        PageStatus @default(pending)
+  holdCode      String?    @map("hold_code") // H01..H22
+  remark        String?
+  submittedBy   String?    @map("submitted_by")
+  approvalDate  DateTime?  @map("approval_date") @db.Date
+  bankFileFiles Json?      @map("bank_file_files")
+  case          Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("jansamarth")
+}
+
+// Bank File Ready (step key: bankFileReady)
+model BankFileReady {
+  id                Int        @id @default(autoincrement())
+  caseId            String     @unique @map("case_id")
+  timestamp         DateTime   @default(now())
+  plannedDate       DateTime?  @map("planned_date")
+  actualDate        DateTime?  @map("actual_date")
+  status            PageStatus @default(pending)
+  holdCode          String?    @map("hold_code") // H01..H22
+  remark            String?
+  submittedBy       String?    @map("submitted_by")
+  bank              String?
+  bankBranch        String?    @map("bank_branch")
+  bankQuotation     Decimal?   @map("bank_quotation") @db.Decimal(14, 2)
+  responsiblePerson String?    @map("responsible_person")
+  case              Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("bank_file_ready")
+}
+
+// File Submission in Bank (step key: fileSubmission)
+model FileSubmission {
+  id              Int        @id @default(autoincrement())
+  caseId          String     @unique @map("case_id")
+  timestamp       DateTime   @default(now())
+  plannedDate     DateTime?  @map("planned_date")
+  actualDate      DateTime?  @map("actual_date")
+  status          PageStatus @default(pending)
+  holdCode        String?    @map("hold_code") // H01..H22
+  remark          String?
+  submittedBy     String?    @map("submitted_by")
+  submissionFiles Json?      @map("submission_files")
+  case            Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("file_submission")
+}
+
+// PHS & Loan Decision (step key: loanIssue)
+model LoanIssueResolution {
+  id           Int        @id @default(autoincrement())
+  caseId       String     @unique @map("case_id")
+  timestamp    DateTime   @default(now())
+  plannedDate  DateTime?  @map("planned_date")
+  actualDate   DateTime?  @map("actual_date")
+  status       PageStatus @default(pending)
+  holdCode     String?    @map("hold_code") // H01..H22
+  remark       String?
+  submittedBy  String?    @map("submitted_by")
+  loanDecision String?    @map("loan_decision")
+  case         Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("loan_issue_resolution")
+}
+
+// Receive First Installment (bank 70%) (step key: firstInstallment)
+model FirstInstallment {
+  id             Int        @id @default(autoincrement())
+  caseId         String     @unique @map("case_id")
+  timestamp      DateTime   @default(now())
+  plannedDate    DateTime?  @map("planned_date")
+  actualDate     DateTime?  @map("actual_date")
+  status         PageStatus @default(pending)
+  holdCode       String?    @map("hold_code") // H01..H22
+  remark         String?
+  submittedBy    String?    @map("submitted_by")
+  amountReceived Decimal?   @map("amount_received") @db.Decimal(14, 2)
+  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("first_installment")
+}
+
+// Receive DP (down payment) (step key: receiveDp)
+model ReceiveDp {
+  id             Int        @id @default(autoincrement())
+  caseId         String     @unique @map("case_id")
+  timestamp      DateTime   @default(now())
+  plannedDate    DateTime?  @map("planned_date")
+  actualDate     DateTime?  @map("actual_date")
+  status         PageStatus @default(pending)
+  holdCode       String?    @map("hold_code") // H01..H22
+  remark         String?
+  submittedBy    String?    @map("submitted_by")
+  amountReceived Decimal?   @map("amount_received") @db.Decimal(14, 2)
+  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("receive_dp")
+}
+
+// Ask 90% Payment for Dispatch (step key: cashAskPayment)
+model CashAskPayment {
+  id          Int        @id @default(autoincrement())
+  caseId      String     @unique @map("case_id")
+  timestamp   DateTime   @default(now())
+  plannedDate DateTime?  @map("planned_date")
+  actualDate  DateTime?  @map("actual_date")
+  status      PageStatus @default(pending)
+  holdCode    String?    @map("hold_code") // H01..H22
+  remark      String?
+  submittedBy String?    @map("submitted_by")
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("cash_ask_payment")
+}
+
+// 90% Payment Received? (Yes / No) (step key: cashPaymentReceived)
+model CashPaymentReceived {
+  id              Int        @id @default(autoincrement())
+  caseId          String     @unique @map("case_id")
+  timestamp       DateTime   @default(now())
+  plannedDate     DateTime?  @map("planned_date")
+  actualDate      DateTime?  @map("actual_date")
+  status          PageStatus @default(pending)
+  holdCode        String?    @map("hold_code") // H01..H22
+  remark          String?
+  submittedBy     String?    @map("submitted_by")
+  paymentReceived String?    @map("payment_received")
+  case            Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("cash_payment_received")
+}
+
+// Check for Approval (Director) (step key: cashApproval)
+model CashApproval {
+  id            Int        @id @default(autoincrement())
+  caseId        String     @unique @map("case_id")
+  timestamp     DateTime   @default(now())
+  plannedDate   DateTime?  @map("planned_date")
+  actualDate    DateTime?  @map("actual_date")
+  status        PageStatus @default(pending)
+  holdCode      String?    @map("hold_code") // H01..H22
+  remark        String?
+  submittedBy   String?    @map("submitted_by")
+  approver      String?
+  approvalFiles Json?      @map("approval_files")
+  case          Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("cash_approval")
+}
+
+// Subsidy Cheque Documents (Odisha) (step key: subsidyChequeReady)
+model SubsidyChequeReady {
+  id                 Int        @id @default(autoincrement())
+  caseId             String     @unique @map("case_id")
+  timestamp          DateTime   @default(now())
+  plannedDate        DateTime?  @map("planned_date")
+  actualDate         DateTime?  @map("actual_date")
+  status             PageStatus @default(pending)
+  holdCode           String?    @map("hold_code") // H01..H22
+  remark             String?
+  submittedBy        String?    @map("submitted_by")
+  balanceAmount      Decimal?   @map("balance_amount") @db.Decimal(14, 2)
+  balanceReceived    Decimal?   @map("balance_received") @db.Decimal(14, 2)
+  centralChequeNo    String?    @map("central_cheque_no")
+  stateChequeNo      String?    @map("state_cheque_no")
+  agreementConfirmed String?    @map("agreement_confirmed")
+  case               Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("subsidy_cheque_ready")
+}
+
+// Accounts Cash Receipt (step key: cashReceipt)
+model CashReceipt {
+  id             Int        @id @default(autoincrement())
+  caseId         String     @unique @map("case_id")
+  timestamp      DateTime   @default(now())
+  plannedDate    DateTime?  @map("planned_date")
+  actualDate     DateTime?  @map("actual_date")
+  status         PageStatus @default(pending)
+  holdCode       String?    @map("hold_code") // H01..H22
+  remark         String?
+  submittedBy    String?    @map("submitted_by")
+  receiptStatus  String?    @map("receipt_status")
+  receiptNo      String?    @map("receipt_no")
+  amountReceived Decimal?   @map("amount_received") @db.Decimal(14, 2)
+  receiptDate    DateTime?  @map("receipt_date") @db.Date
+  signedBy       String?    @map("signed_by")
+  receiptFiles   Json?      @map("receipt_files")
+  invoiceFiles   Json?      @map("invoice_files")
+  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("cash_receipt")
+}
+
+// Dispatch (Loan) (step key: dispatch)
+model Dispatch {
+  id           Int        @id @default(autoincrement())
+  caseId       String     @unique @map("case_id")
+  timestamp    DateTime   @default(now())
+  plannedDate  DateTime?  @map("planned_date")
+  actualDate   DateTime?  @map("actual_date")
+  status       PageStatus @default(pending)
+  holdCode     String?    @map("hold_code") // H01..H22
+  remark       String?
+  submittedBy  String?    @map("submitted_by")
+  dispatchDate DateTime?  @map("dispatch_date") @db.Date
+  materialList String?    @map("material_list")
+  dispatchedBy String?    @map("dispatched_by")
+  deliveredBy  String?    @map("delivered_by")
+  case         Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("dispatch")
+}
+
+// Dispatch (Cash / Subsidy Cheque) (step key: cashDispatch)
+model CashDispatch {
+  id              Int        @id @default(autoincrement())
+  caseId          String     @unique @map("case_id")
+  timestamp       DateTime   @default(now())
+  plannedDate     DateTime?  @map("planned_date")
+  actualDate      DateTime?  @map("actual_date")
+  status          PageStatus @default(pending)
+  holdCode        String?    @map("hold_code") // H01..H22
+  remark          String?
+  submittedBy     String?    @map("submitted_by")
+  dispatchDate    DateTime?  @map("dispatch_date") @db.Date
+  materialList    String?    @map("material_list")
+  dispatchedBy    String?    @map("dispatched_by")
+  deliveredBy     String?    @map("delivered_by")
+  tpwodlReference String?    @map("tpwodl_reference")
+  case            Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("cash_dispatch")
+}
+
+// Assign Installer (step key: assignInstaller)
+model AssignInstaller {
+  id            Int        @id @default(autoincrement())
+  caseId        String     @unique @map("case_id")
+  timestamp     DateTime   @default(now())
+  plannedDate   DateTime?  @map("planned_date")
+  actualDate    DateTime?  @map("actual_date")
+  status        PageStatus @default(pending)
+  holdCode      String?    @map("hold_code") // H01..H22
+  remark        String?
+  submittedBy   String?    @map("submitted_by")
+  installerName String?    @map("installer_name")
+  assignDate    DateTime?  @map("assign_date") @db.Date
+  case          Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("assign_installer")
+}
+
+// Installation Pending (step key: installationComplete)
+model InstallationComplete {
+  id                  Int        @id @default(autoincrement())
+  caseId              String     @unique @map("case_id")
+  timestamp           DateTime   @default(now())
+  plannedDate         DateTime?  @map("planned_date")
+  actualDate          DateTime?  @map("actual_date")
+  status              PageStatus @default(pending)
+  holdCode            String?    @map("hold_code") // H01..H22
+  remark              String?
+  submittedBy         String?    @map("submitted_by")
+  installationDate    DateTime?  @map("installation_date") @db.Date
+  installerName       String?    @map("installer_name")
+  panelSerialFiles    Json?      @map("panel_serial_files")
+  inverterSerialFiles Json?      @map("inverter_serial_files")
+  plantGeotagFiles    Json?      @map("plant_geotag_files")
+  case                Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("installation_complete")
+}
+
+// Bill & DCR (step key: billDcr)
+model BillDcr {
+  id                  Int        @id @default(autoincrement())
+  caseId              String     @unique @map("case_id")
+  timestamp           DateTime   @default(now())
+  plannedDate         DateTime?  @map("planned_date")
+  actualDate          DateTime?  @map("actual_date")
+  status              PageStatus @default(pending)
+  holdCode            String?    @map("hold_code") // H01..H22
+  remark              String?
+  submittedBy         String?    @map("submitted_by")
+  billNo              String?    @map("bill_no")
+  dcrNo               String?    @map("dcr_no")
+  documentDate        DateTime?  @map("document_date") @db.Date
+  invoiceFiles        Json?      @map("invoice_files")
+  dcrFiles            Json?      @map("dcr_files")
+  workCompletionFiles Json?      @map("work_completion_files")
+  case                Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("bill_dcr")
+}
+
+// Portal Installation Submission (step key: portalInstallation)
+model PortalInstallation {
+  id             Int        @id @default(autoincrement())
+  caseId         String     @unique @map("case_id")
+  timestamp      DateTime   @default(now())
+  plannedDate    DateTime?  @map("planned_date")
+  actualDate     DateTime?  @map("actual_date")
+  status         PageStatus @default(pending)
+  holdCode       String?    @map("hold_code") // H01..H22
+  remark         String?
+  submittedBy    String?    @map("submitted_by")
+  applicationNo  String?    @map("application_no")
+  submissionDate DateTime?  @map("submission_date") @db.Date
+  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("portal_installation")
+}
+
+// Submit Inspection File (step key: inspectionFile)
+model InspectionFile {
+  id              Int        @id @default(autoincrement())
+  caseId          String     @unique @map("case_id")
+  timestamp       DateTime   @default(now())
+  plannedDate     DateTime?  @map("planned_date")
+  actualDate      DateTime?  @map("actual_date")
+  status          PageStatus @default(pending)
+  holdCode        String?    @map("hold_code") // H01..H22
+  remark          String?
+  submittedBy     String?    @map("submitted_by")
+  inspectionRoute String?    @map("inspection_route")
+  filedDate       DateTime?  @map("filed_date") @db.Date
+  filedBy         String?    @map("filed_by")
+  inspectionFiles Json?      @map("inspection_files")
+  case            Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("inspection_file")
+}
+
+// Meter Installation (step key: meterInspection)
+model MeterInstallation {
+  id          Int        @id @default(autoincrement())
+  caseId      String     @unique @map("case_id")
+  timestamp   DateTime   @default(now())
+  plannedDate DateTime?  @map("planned_date")
+  actualDate  DateTime?  @map("actual_date")
+  status      PageStatus @default(pending)
+  holdCode    String?    @map("hold_code") // H01..H22
+  remark      String?
+  submittedBy String?    @map("submitted_by")
+  meterImages Json?      @map("meter_images")
+  case        Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("meter_installation")
+}
+
+// JE Site Inspection (step key: jeInspection)
+model JeInspection {
+  id          Int        @id @default(autoincrement())
+  caseId      String     @unique @map("case_id")
+  timestamp   DateTime   @default(now())
+  plannedDate DateTime?  @map("planned_date")
+  actualDate  DateTime?  @map("actual_date")
+  status      PageStatus @default(pending)
+  holdCode    String?    @map("hold_code") // H01..H22
+  remark      String?
+  submittedBy String?    @map("submitted_by")
+  jeVisitDate DateTime?  @map("je_visit_date") @db.Date
+  jeApproval  String?    @map("je_approval")
+  case        Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("je_inspection")
+}
+
+// Generation & Wi-Fi (step key: generationWifi)
+model GenerationWifi {
+  id                Int        @id @default(autoincrement())
+  caseId            String     @unique @map("case_id")
+  timestamp         DateTime   @default(now())
+  plannedDate       DateTime?  @map("planned_date")
+  actualDate        DateTime?  @map("actual_date")
+  status            PageStatus @default(pending)
+  holdCode          String?    @map("hold_code") // H01..H22
+  remark            String?
+  submittedBy       String?    @map("submitted_by")
+  configurationDate DateTime?  @map("configuration_date") @db.Date
+  inverterId        String?    @map("inverter_id")
+  loginShared       String?    @map("login_shared")
+  plantSwitchedOn   String?    @map("plant_switched_on")
+  case              Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("generation_wifi")
+}
+
+// Portal Inspection Approval (step key: portalInspectionApproval)
+model PortalInspectionApproval {
+  id                 Int        @id @default(autoincrement())
+  caseId             String     @unique @map("case_id")
+  timestamp          DateTime   @default(now())
+  plannedDate        DateTime?  @map("planned_date")
+  actualDate         DateTime?  @map("actual_date")
+  status             PageStatus @default(pending)
+  holdCode           String?    @map("hold_code") // H01..H22
+  remark             String?
+  submittedBy        String?    @map("submitted_by")
+  portalApprovalDate DateTime?  @map("portal_approval_date") @db.Date
+  reverification     String?
+  duplicateSerial    String?    @map("duplicate_serial")
+  case               Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("portal_inspection_approval")
+}
+
+// Tariff Code Check (step key: tariffCheck)
+model TariffCodeCheck {
+  id          Int        @id @default(autoincrement())
+  caseId      String     @unique @map("case_id")
+  timestamp   DateTime   @default(now())
+  plannedDate DateTime?  @map("planned_date")
+  actualDate  DateTime?  @map("actual_date")
+  status      PageStatus @default(pending)
+  holdCode    String?    @map("hold_code") // H01..H22
+  remark      String?
+  submittedBy String?    @map("submitted_by")
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("tariff_code_check")
+}
+
+// Final 30% Bank File (loan) (step key: finalBankFile)
+model FinalBankFile {
+  id             Int        @id @default(autoincrement())
+  caseId         String     @unique @map("case_id")
+  timestamp      DateTime   @default(now())
+  plannedDate    DateTime?  @map("planned_date")
+  actualDate     DateTime?  @map("actual_date")
+  status         PageStatus @default(pending)
+  holdCode       String?    @map("hold_code") // H01..H22
+  remark         String?
+  submittedBy    String?    @map("submitted_by")
+  submittedDate  DateTime?  @map("submitted_date") @db.Date
+  finalBankFiles Json?      @map("final_bank_files")
+  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("final_bank_file")
+}
+
+// Final 30% Received (loan) (step key: finalBankPayment)
+model FinalBankPayment {
+  id           Int        @id @default(autoincrement())
+  caseId       String     @unique @map("case_id")
+  timestamp    DateTime   @default(now())
+  plannedDate  DateTime?  @map("planned_date")
+  actualDate   DateTime?  @map("actual_date")
+  status       PageStatus @default(pending)
+  holdCode     String?    @map("hold_code") // H01..H22
+  remark       String?
+  submittedBy  String?    @map("submitted_by")
+  amount       Decimal?   @db.Decimal(14, 2)
+  receivedDate DateTime?  @map("received_date") @db.Date
+  case         Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("final_bank_payment")
+}
+
+// Subsidy Redeem (step key: subsidyRedeem)
+model SubsidyRedeem {
+  id               Int        @id @default(autoincrement())
+  caseId           String     @unique @map("case_id")
+  timestamp        DateTime   @default(now())
+  plannedDate      DateTime?  @map("planned_date")
+  actualDate       DateTime?  @map("actual_date")
+  status           PageStatus @default(pending)
+  holdCode         String?    @map("hold_code") // H01..H22
+  remark           String?
+  submittedBy      String?    @map("submitted_by")
+  redeemDate       DateTime?  @map("redeem_date") @db.Date
+  subsidyReference String?    @map("subsidy_reference")
+  case             Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("subsidy_redeem")
+}
+
+// Subsidy Disbursal (step key: subsidyDisbursal)
+model SubsidyDisbursal {
+  id                   Int        @id @default(autoincrement())
+  caseId               String     @unique @map("case_id")
+  timestamp            DateTime   @default(now())
+  plannedDate          DateTime?  @map("planned_date")
+  actualDate           DateTime?  @map("actual_date")
+  status               PageStatus @default(pending)
+  holdCode             String?    @map("hold_code") // H01..H22
+  remark               String?
+  submittedBy          String?    @map("submitted_by")
+  centralDisbursalDate DateTime?  @map("central_disbursal_date") @db.Date
+  stateDisbursalDate   DateTime?  @map("state_disbursal_date") @db.Date
+  case                 Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("subsidy_disbursal")
+}
+
+// Subsidy Cheques Deposit (Odisha) (step key: chequeDeposit)
+model ChequeDeposit {
+  id                 Int        @id @default(autoincrement())
+  caseId             String     @unique @map("case_id")
+  timestamp          DateTime   @default(now())
+  plannedDate        DateTime?  @map("planned_date")
+  actualDate         DateTime?  @map("actual_date")
+  status             PageStatus @default(pending)
+  holdCode           String?    @map("hold_code") // H01..H22
+  remark             String?
+  submittedBy        String?    @map("submitted_by")
+  centralDepositDate DateTime?  @map("central_deposit_date") @db.Date
+  stateDepositDate   DateTime?  @map("state_deposit_date") @db.Date
+  chequeStatus       String?    @map("cheque_status")
+  case               Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("cheque_deposit")
+}
+
+// Balance Clearance (step key: balanceClearance)
+model BalanceClearance {
+  id               Int        @id @default(autoincrement())
+  caseId           String     @unique @map("case_id")
+  timestamp        DateTime   @default(now())
+  plannedDate      DateTime?  @map("planned_date")
+  actualDate       DateTime?  @map("actual_date")
+  status           PageStatus @default(pending)
+  holdCode         String?    @map("hold_code") // H01..H22
+  remark           String?
+  submittedBy      String?    @map("submitted_by")
+  totalAmount      Decimal?   @map("total_amount") @db.Decimal(14, 2)
+  discount         Decimal?   @db.Decimal(14, 2)
+  amountReceived   Decimal?   @map("amount_received") @db.Decimal(14, 2)
+  remainingBalance Decimal?   @map("remaining_balance") @db.Decimal(14, 2)
+  clearanceDate    DateTime?  @map("clearance_date") @db.Date
+  case             Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("balance_clearance")
+}
+
+// Warranty & Handover (step key: warranty)
+model Warranty {
+  id                    Int        @id @default(autoincrement())
+  caseId                String     @unique @map("case_id")
+  timestamp             DateTime   @default(now())
+  plannedDate           DateTime?  @map("planned_date")
+  actualDate            DateTime?  @map("actual_date")
+  status                PageStatus @default(pending)
+  holdCode              String?    @map("hold_code") // H01..H22
+  remark                String?
+  submittedBy           String?    @map("submitted_by")
+  balanceStatus         String?    @map("balance_status")
+  balanceDue            Decimal?   @map("balance_due") @db.Decimal(14, 2)
+  balanceRecovered      Decimal?   @map("balance_recovered") @db.Decimal(14, 2)
+  warrantyType          String?    @map("warranty_type")
+  tataWarrantyReference String?    @map("tata_warranty_reference")
+  panelWarrantyDcr      String?    @map("panel_warranty_dcr")
+  inverterRegistration  String?    @map("inverter_registration")
+  warrantyDate          DateTime?  @map("warranty_date") @db.Date
+  handoverKitGiven      Boolean?   @map("handover_kit_given")
+  case                  Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, plannedDate])
+  @@map("warranty")
+}
