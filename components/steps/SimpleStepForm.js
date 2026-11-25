@@ -17,7 +17,7 @@ export function makeSimpleForm({ stepKey, withAmount = false, extra = [], remark
       workStatus: "Done", // no Status field: submitting completes the step
       amount: prev?.amount ?? "",
       remark: prev?.remark ?? "",
-      ...Object.fromEntries(extra.map((x) => [x.key, prev?.[x.key] ?? (x.type === "files" ? [] : x.today ? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) : "")])),
+      ...Object.fromEntries(extra.map((x) => [x.key, prev?.[x.key] ?? (x.type === "files" ? [] : x.fromRow ? row[x.fromRow] ?? "" : x.today ? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) : "")])),
     });
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState("");

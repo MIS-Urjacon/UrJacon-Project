@@ -155,6 +155,23 @@ complete rule/hold/role/document glossary is visible in the app at
   Mark as lost). Marking a lead lost is Call Tracker's "Not interested". The one exception is a lost lead, whose Update popup still
   offers **Reopen lead**.
 
+- **Loan / installation popup updates.** Assign Installer: Installer Name is a dropdown (Installer master) and the date is
+  labelled **Installation Date**; Installation Pending pre-fills that date and the Installer (editable dropdown). Inspection
+  Filing has **Route Lead Time (days)**. Meter Installation shows Lead Source and Lead Date (read only; older cases use the case date) and asks a Geotag Image
+  (pre-filled from Installation Pending). Plant Commissioning no longer asks a Configuration Date. The Agreement step is named
+  **Make Agreement** (page title and sidebar; route unchanged). Bank File Ready uses Bank Name, Branch Name, Quotation Amount,
+  Route, Office and shows the assignee in the popup; File Submission shows Bank Name / Branch Name. PHS & Loan Decision:
+  Sanctioned (needs Sanctioned Amount) or Rejected (needs Rejection Reason; the case stays on hold, H08).
+
+- **JE Site Inspection.** No JE Visit Date input: the server saves the submit day. JE Approval is Approved or Rejected.
+  Rejected needs a remark and works like Login Hold: the case goes to Document Receive with an issue ("Site / technical issue",
+  the JE remark as description). After Document Receive and Verification it returns to JE Site Inspection, which shows the
+  earlier rejection and asks the result again.
+
+- **Portal Inspection Approval.** Reverification and Duplicate Serial No. are removed. Status is Approved (needs the Portal Approval
+  Date) or Revert (needs a remark): Revert sends the case to Document Receive as an issue ("Portal / DISCOM issue"), exactly like a
+  JE rejection, and it returns to Portal Inspection Approval after Document Verification.
+
 ### Lead management (before the case process)
 
 Stage A is split into three operational pages. Leads are stored separately from
@@ -609,7 +626,7 @@ No other file should need to change. If it does, the structure is wrong.
 - `data/cases.json`: all cases (array). Read/write only through `lib/store.js`.
 - `data/leads.json`: all leads (array). Read/write only through `lib/leads.js`.
 - `data/uploads/`: uploaded files (random names). Served by
-  `GET /api/files/[name]`. Git-ignored.
+  `GET /api/files/[...path]`. Git-ignored.
 - A case looks like:
 
 ```json
@@ -650,7 +667,7 @@ No other file should need to change. If it does, the structure is wrong.
     answers are columns, unused ones NULL; file lists are jsonb), `urjacon_case_schedule`
     (Timestamp / Planned / Actual per step), `urjacon_leads`, `urjacon_lead_followups`,
     `urjacon_users`, `urjacon_masters` (one row per value). Private bucket
-    `urjacon-uploads` holds uploads. Each save writes only that case / lead / user.
+    `Urjacon PMSG` (env `SUPABASE_BUCKET`) holds uploads in one folder per type (`Leads`, `Quotations`, `Documents`, `Site-Survey`, `Issues`, `Others`; the caller passes `folder` to `/api/upload`, `FileUpload` has a `folder` prop; unknown folder = `Others`). With only the anon key run `supabase/add_pmsg_bucket_policy.sql` once. The old `urjacon-uploads` bucket is still read, so old file links keep working. Each save writes only that case / lead / user.
   - **Local JSON files** in `/data` (no env vars): dev only. On Vercel the disk is
     read-only, so the Supabase vars are **required** there.
 - Code entry points: `lib/db.js` (connection, JSON fallback, uploads), `lib/store.js`
@@ -695,7 +712,7 @@ No other file should need to change. If it does, the structure is wrong.
 | GET                       | `/api/masters`                        | All masters (any signed-in user)                                     |
 | POST / DELETE             | `/api/masters`                        | Add / remove a master value (admin only)                             |
 | POST                      | `/api/upload`                         | Upload a file (JPG/PNG/WEBP/GIF/PDF, max 5 MB)                       |
-| GET                       | `/api/files/[name]`                   | Serve an uploaded file                                               |
+| GET                       | `/api/files/[...path]`                | Serve an uploaded file                                               |
 
 Validation always happens on the server (`lib/validate.js`), even if the form
 also checks.

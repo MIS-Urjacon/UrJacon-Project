@@ -236,6 +236,21 @@ export const C = {
     label: "Bank / Branch",
     cell: (r) => (bankStep(r)?.bank ? <Stack top={bankStep(r).bank} bottom={bankStep(r).bankBranch} /> : dash),
   },
+  bankNameBranch: {
+    label: "Bank Name / Branch Name",
+    cell: (r) => (bankStep(r)?.bank ? <Stack top={bankStep(r).bank} bottom={bankStep(r).bankBranch} /> : dash),
+  },
+  quotationAmount: {
+    label: "Quotation Amount",
+    cell: (r) => (bankStep(r)?.bank ? <Stack top={money(bankStep(r).bankQuotation)} bottom={bankStep(r).responsiblePerson} /> : dash),
+  },
+  bankRouteOffice: {
+    label: "Route / Office",
+    cell: (r) => {
+      const b = step(r, "bankFileReady");
+      return b?.bankRoute || b?.bankOffice ? <Stack top={b.bankRoute} bottom={b.bankOffice} /> : dash;
+    },
+  },
   submittedFile: {
     label: "Submitted File",
     cell: (r) => {
@@ -374,7 +389,7 @@ export const OUT = {
   nameCheck: [C.verified],
   siteSurvey: [C.contact, C.surveyDate],
   paymentWorkStart: [C.cashLoan],
-  bankFileReady: [C.bankInfo, C.quotation, remarkCol("bankFileReady")],
+  bankFileReady: [C.bankNameBranch, C.quotationAmount, C.bankRouteOffice, remarkCol("bankFileReady")],
   loanIssue: [remarkCol("loanIssue")],
   fileSubmission: [C.submittedFile],
   firstInstallment: [C.firstAmount, remarkCol("firstInstallment")],
@@ -400,7 +415,7 @@ export const CARRY = {
   paymentWorkStart: [C.routeAmount, C.contact, C.surveyDate],
   bankFileReady: [C.cashLoan, C.routeAmount, C.contact],
   loanIssue: [C.cashLoan, C.routeAmount],
-  fileSubmission: [C.cashLoan, C.routeAmount, C.bankInfo, C.quotation],
+  fileSubmission: [C.cashLoan, C.routeAmount, C.bankNameBranch, C.quotation],
   firstInstallment: [C.bankInfo, C.quotation, C.routeAmount],
   receiveDp: [C.bankInfo, C.quotation, C.firstAmount],
   dispatch: [C.surveyDispatch, C.quotation, C.firstAmount, C.dpAmount],
@@ -664,10 +679,29 @@ const C2 = {
   },
   // Installation: Assign Installer date
   assignDate: {
-    label: "Assign Date",
+    label: "Installation Date",
     cell: (r) => {
       const v = step(r, "assignInstaller")?.assignDate;
       return v ? fmtDate(v) : dash;
+    },
+  },
+  meterGeotag: {
+    label: "Geotag Image",
+    cell: (r) => {
+      const files = step(r, "meterInspection")?.meterGeotagFiles ?? [];
+      if (!files.length) return dash;
+      return (
+        <div className="flex gap-1.5">
+          {files.map((file) => (
+            <a key={file.url} href={file.url} target="_blank" rel="noreferrer" title={file.name} className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+              {file.url.endsWith(".pdf") ? "PDF" : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={file.url} alt={file.name || "Geotag"} className="h-full w-full object-cover" />
+              )}
+            </a>
+          ))}
+        </div>
+      );
     },
   },
   // Accounts Cash Receipt summary (carried into Dispatch)
@@ -716,6 +750,10 @@ const C2 = {
     ["Date", "jeVisitDate", "date"],
     ["Approval", "jeApproval"],
   ]),
+  leadSourceDate: {
+    label: "Lead Source / Date",
+    cell: (r) => (r.leadSource || r.leadDate || r.timestamp ? <Stack top={r.leadSource} bottom={fmtDate(r.leadDate || r.timestamp)} /> : dash),
+  },
   commissionCarry: stepLines("Commissioning", "generationWifi", [
     ["Inverter ID", "inverterId"],
     ["Switched on", "plantSwitchedOn"],
@@ -759,7 +797,7 @@ addOut("assignInstaller", C2.assignDate);
 // Steps built from lib/processConfig.js: every configured field + remark (shown by ReferenceStepPage in History).
 for (const key of Object.keys(PROCESS_CONFIG)) {
   if (key === "balanceClearance") OUT[key] = [C2.balanceClear, remarkCol(key)];
-  else if (key === "meterInspection") OUT[key] = [C.meterImage, remarkCol(key)];
+  else if (key === "meterInspection") OUT[key] = [C.meterImage, C2.meterGeotag, remarkCol(key)];
   else OUT[key] = configColumns(key);
 }
 
@@ -779,11 +817,11 @@ addCarry("cashDispatch", C2.receiptCarry, C2.surveyMaterialCarry);
 addCarry("subsidyChequeReady", C.cashLoan, C.routeAmount, C2.agreementCarry);
 addCarry("cashReceipt", C.cashLoan, C.routeAmount, C.payRecv, C2.chequeCarry);
 addCarry("assignInstaller", C2.dispatchCarry, C2.cashDispatchCarry);
-addCarry("installationComplete", C.installer, C.contact, C2.dispatchCarry, C2.cashDispatchCarry);
+addCarry("installationComplete", C.installer, C2.assignDate, C.contact, C2.dispatchCarry, C2.cashDispatchCarry);
 addCarry("billDcr", C2.installDone, C.cashLoan, C.payRecv);
 addCarry("portalInstallation", C.pmsgNumber, C2.billCarry);
 addCarry("inspectionFile", C2.portalSubCarry);
-addCarry("meterInspection", C2.inspectionCarry);
+addCarry("meterInspection", C2.inspectionCarry, C2.leadSourceDate);
 addCarry("jeInspection", C.meterImage);
 addCarry("generationWifi", C2.jeCarry);
 addCarry("portalInspectionApproval", C.pmsgNumber, C2.commissionCarry);

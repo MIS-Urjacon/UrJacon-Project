@@ -1,22 +1,3 @@
-// Urjacon Process System: simple relational schema (PostgreSQL / Supabase).
-//
-// STATUS: DRAFT for owner approval. Not migrated yet; the running app still uses the urjacon_* tables
-// (supabase/schema.sql), so no output changes.
-//
-// Rules of this design
-//   * One table per page, named after the page (leads, call_tracker, quotations, document_receive, login_pmsg,
-//     site_survey, dispatch, warranty ...). Case pages hold one row per case.
-//   * Every page table has the same three date columns, so delay is one subtraction:
-//       timestamp    = when the work arrived at this page
-//       planned_date = timestamp + the page's TAT
-//       actual_date  = when the page was submitted (NULL while pending)
-//       delay        = actual_date - planned_date  (or now() - planned_date while still pending)
-//   * status = pending | done | hold. A row is created when the case arrives at the page (status pending),
-//     and filled when the page is submitted.
-//   * Dropdown answers are plain text. State, Payment Mode, Branch, Dealer, ... come from the masters table.
-//   * Uploaded files are stored as a JSON list [{ "url": "...", "name": "..." }] in the column that owns them.
-//   * Roles: only admin and user.
-
 generator client {
   provider = "prisma-client"
   output   = "../lib/generated/prisma"
@@ -55,8 +36,6 @@ model User {
   @@map("users")
 }
 
-// Settings > System Masters. type = state, paymentMode, branch, dealer, liaisoning, productCode, bank,
-// responsiblePerson, installer, route, brand. Only the values the system already has are stored.
 model Master {
   id        Int    @id @default(autoincrement())
   type      String

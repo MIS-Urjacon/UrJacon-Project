@@ -57,7 +57,7 @@ export default function IssueReportForm({ row, stepKey, count = 1, stageLabel, n
       </div>
       <div>
         <Label>Screenshots / Documents (optional)</Label>
-        <FileUpload files={files} onChange={setFiles} max={3} />
+        <FileUpload files={files} onChange={setFiles} max={3} folder="Issues" />
       </div>
       <FormActions onCancel={onCancel} saving={saving} error={err} submitLabel="Report issue" />
     </form>

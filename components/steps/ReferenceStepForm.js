@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DropSelect from "@/components/Select";
 import FileUpload from "@/components/FileUpload";
 import CaseDetails from "@/components/steps/CaseDetails";
@@ -9,6 +9,12 @@ import { materialDefault, materialItems } from "@/lib/materials";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 import { HOLD_REASONS, PROCESS_CONFIG, RECEIPT_STATUS } from "@/lib/processConfig";
+
+// Steps whose "no" answer sends the case to Document Receive as an issue.
+const SEND_BACK = {
+  jeInspection: { key: "jeApproval", value: "Rejected", earlier: "Earlier JE rejection", placeholder: "Why the JE rejected the site inspection (required)", button: "Reject & send to Document Receive" },
+  portalInspectionApproval: { key: "portalStatus", value: "Revert", earlier: "Earlier portal revert", placeholder: "Why the portal reverted the inspection (required)", button: "Revert & send to Document Receive" },
+};
 
 export default function ReferenceStepForm({ stepKey, row, readOnly, onSubmit, onCancel }) {
   const config = PROCESS_CONFIG[stepKey];
@@ -20,13 +26,31 @@ export default function ReferenceStepForm({ stepKey, row, readOnly, onSubmit, on
     retryDate: previous?.retryDate ?? "",
     remark: previous?.remark ?? "",
     ...Object.fromEntries(config.fields.map((item) => [item.key, initialFieldValue(row, previous, item)])),
+    // A JE rejection is shown above; the approval and remark start empty so the new result is recorded fresh.
+    ...(SEND_BACK[stepKey] && previous?.[SEND_BACK[stepKey].key] === SEND_BACK[stepKey].value ? { [SEND_BACK[stepKey].key]: "", remark: "" } : {}),
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Dropdowns that read Settings > System Masters (e.g. Installer); a saved value that left the list stays selectable.
+  const [masters, setMasters] = useState({});
+  useEffect(() => {
+    if (!config.fields.some((item) => item.master)) return;
+    fetch("/api/masters").then((r) => (r.ok ? r.json() : {})).then(setMasters).catch(() => {});
+  }, [config.fields]);
+  const optionsOf = (item) => {
+    if (!item.master) return item.options;
+    const list = masters[item.master] ?? [];
+    const current = form[item.key];
+    return current && !list.includes(current) ? [...list, current] : list;
+  };
+  const visible = (item) => !item.hidden && (!item.showWhen || form[item.showWhen.key] === item.showWhen.value);
   const receipt = Boolean(config.receiptStatus); // Accounts Cash Receipt: Receipt Status replaces Status + Hold Reason Code
   const hold = receipt ? form.receiptStatus === RECEIPT_STATUS.BELOW : form.workStatus === "Not Done";
   const optionalFields = receipt && form.receiptStatus === RECEIPT_STATUS.WITHOUT; // cash details may stay empty
-  const remarkRequired = hold || (receipt && form.receiptStatus === RECEIPT_STATUS.WITHOUT);
+  // Rejected / reverted: the remark is mandatory and the case goes to Document Receive as an issue.
+  const sendBack = SEND_BACK[stepKey];
+  const jeRejected = Boolean(sendBack) && form[sendBack.key] === sendBack.value;
+  const remarkRequired = hold || jeRejected || (receipt && form.receiptStatus === RECEIPT_STATUS.WITHOUT);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   async function submit(event) {
@@ -45,6 +69,13 @@ export default function ReferenceStepForm({ stepKey, row, readOnly, onSubmit, on
       {["dispatch", "cashDispatch"].includes(stepKey) && row.steps?.siteSurvey?.status !== "done" && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
           The survey is not completed for this case. Dispatch is blocked until the survey report is filled on the Survey List page.
+        </div>
+      )}
+      {sendBack && previous?.[sendBack.key] === sendBack.value && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <div className="font-semibold">{sendBack.earlier}{previous.jeVisitDate ? ` (${previous.jeVisitDate})` : ""}</div>
+          <div className="mt-1">{previous.remark}</div>
+          <div className="mt-1 text-xs">{row.issue?.fromStep === stepKey && !row.issue.open ? "The issue was fixed in Document Receive. Record the result again." : "Record the result again."}</div>
         </div>
       )}
       <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-700">
@@ -72,7 +103,7 @@ export default function ReferenceStepForm({ stepKey, row, readOnly, onSubmit, on
       <fieldset disabled={readOnly || hold}>
         <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Required details</legend>
         <div className="grid gap-4 sm:grid-cols-2">
-          {config.fields.map((item) => item.type === "files" ? (
+          {config.fields.filter(visible).map((item) => item.type === "files" ? (
             <div key={item.key} className="sm:col-span-2">
               <Label required={item.required && !optionalFields}>{item.label}</Label>
               <FileUpload files={form[item.key]} onChange={(files) => set(item.key, files)} max={item.max ?? 5} readOnly={readOnly || hold} />
@@ -83,17 +114,17 @@ export default function ReferenceStepForm({ stepKey, row, readOnly, onSubmit, on
               <MaterialEditor value={form[item.key]} onChange={(text) => set(item.key, text)} readOnly={readOnly || hold} />
             </div>
           ) : item.type === "select" ? (
-            <Select key={item.key} label={item.label} required={item.required && !optionalFields} value={form[item.key]} options={item.options} onChange={(value) => set(item.key, value)} hint={form[item.key] ? item.autoFrom : ""} />
+            <Select key={item.key} label={item.label} required={item.required && !optionalFields} value={form[item.key]} options={optionsOf(item)} onChange={(value) => set(item.key, value)} hint={form[item.key] ? item.autoFrom : ""} />
           ) : (
-            <Field key={item.key} label={item.label} required={item.required && !optionalFields} type={item.type} value={form[item.key]} onChange={(value) => set(item.key, value)} hint={form[item.key] !== "" ? item.autoFrom : ""} />
+            <Field key={item.key} label={item.label} required={(item.required || Boolean(item.showWhen)) && !optionalFields} type={item.type} value={form[item.key]} onChange={(value) => set(item.key, value)} hint={form[item.key] !== "" ? item.autoFrom : ""} />
           ))}
         </div>
       </fieldset>
       <label className="block">
         <Label required={remarkRequired}>Remark</Label>
-        <textarea className="field !h-auto py-2.5" rows={3} disabled={readOnly} value={form.remark} onChange={(event) => set("remark", event.target.value)} placeholder={hold ? "Explain the hold and next action" : receipt && form.receiptStatus === RECEIPT_STATUS.WITHOUT ? "Who approved dispatch without cash or down payment, and when the payment is expected" : "Optional remark"} />
+        <textarea className="field !h-auto py-2.5" rows={3} disabled={readOnly} value={form.remark} onChange={(event) => set("remark", event.target.value)} placeholder={hold ? "Explain the hold and next action" : jeRejected ? sendBack?.placeholder : receipt && form.receiptStatus === RECEIPT_STATUS.WITHOUT ? "Who approved dispatch without cash or down payment, and when the payment is expected" : "Optional remark"} />
       </label>
-      <FormActions readOnly={readOnly} onCancel={onCancel} saving={saving} error={error} submitLabel={hold ? "Save on Hold" : "Complete Step"} />
+      <FormActions readOnly={readOnly} onCancel={onCancel} saving={saving} error={error} submitLabel={hold ? "Save on Hold" : jeRejected ? sendBack.button : "Complete Step"} />
     </form>
   );
 }

@@ -36,6 +36,7 @@ export default function DocumentReceivePage() {
       title="Document Receive"
       subtitle="Step 4 · Receive Aadhaar, PAN, Passbook and Bijli Bill, record the name on each, mark Tata or Non-Tata and any correction. Reported issues also come back here. Only proper documents move to Document Verification."
       columns={columns}
+      showIssueTab
       historyColumns={OUT.documentReceive}
       Form={DocumentReceiveForm}
       modalTitle="Document Receive"

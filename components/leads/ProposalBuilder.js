@@ -125,6 +125,7 @@ export default function ProposalBuilder({ proposal, setProposal, paymentMode, mo
   async function uploadImage(file) {
     const body = new FormData();
     body.append("file", file);
+    body.append("folder", "Quotations");
     const response = await fetch("/api/upload", { method: "POST", body });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Upload failed");

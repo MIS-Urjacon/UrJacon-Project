@@ -6,6 +6,7 @@ import FileUpload from "@/components/FileUpload";
 import { CaseSummary } from "@/components/ui";
 import { FormActions, Label } from "./shared";
 import { NAME_DOCS, STAGE_LABEL, normName } from "@/lib/workflow";
+import { documentIssueReturnStep } from "@/lib/issues";
 import QuoteButton from "@/components/steps/QuoteButton";
 import DocumentPricing from "@/components/steps/DocumentPricing";
 
@@ -66,6 +67,7 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
   const allProper = NAME_DOCS.every(
     ([k]) => state(k) === "match" && docs[k].reviewStatus === "Proper"
   );
+  const returnsDirectlyToSource = Boolean(documentIssueReturnStep(row.issue));
   const anyCorrection = NAME_DOCS.some(([k]) => needsCorrection(k));
   const correctionDocuments = NAME_DOCS.filter(([k]) => needsCorrection(k)).map(([, label]) => label);
 
@@ -131,7 +133,11 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
               ))}
             </div>
           )}
-          <div className="mt-1 text-xs">Fix it here; the case then goes to Document Verification and returns to {STAGE_LABEL[row.issue.fromStep]} once verified.</div>
+          <div className="mt-1 text-xs">
+            {returnsDirectlyToSource
+              ? `Fix it here; once proper documents are submitted, the case returns directly to ${STAGE_LABEL[row.issue.fromStep]}.`
+              : `Fix it here; the case then goes to Document Verification and returns to ${STAGE_LABEL[row.issue.fromStep]} once verified.`}
+          </div>
         </div>
       )}
       <LeadDetails row={row} pick={pick} />
@@ -228,7 +234,7 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
                   value={docs[k].name}
                   onChange={(e) => set(k, { name: e.target.value })}
                 />
-                <FileUpload files={docs[k].files} onChange={(files) => set(k, { files })} max={1} readOnly={readOnly} compact />
+                <FileUpload files={docs[k].files} onChange={(files) => set(k, { files })} max={1} readOnly={readOnly} compact folder="Documents" />
                 <fieldset disabled={readOnly} className="flex h-10 overflow-hidden rounded-lg border border-slate-200 bg-white text-xs font-semibold">
                   {["Proper", "Correction Required"].map((value) => (
                     <label
@@ -263,7 +269,7 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
       <section>
         <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Terrace geotag photo (optional)</div>
         <div className="rounded-xl border border-slate-200 px-4 py-3">
-          <FileUpload files={terracePhoto} onChange={setTerracePhoto} max={1} readOnly={readOnly} compact />
+          <FileUpload files={terracePhoto} onChange={setTerracePhoto} max={1} readOnly={readOnly} compact folder="Documents" />
         </div>
       </section>
 
@@ -306,7 +312,9 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
           }`}
         >
           {allProper
-            ? "All 4 documents are proper. This case will move to Document Verification."
+            ? returnsDirectlyToSource
+              ? `All 4 documents are proper. This case will return to ${STAGE_LABEL[row.issue.fromStep]}.`
+              : "All 4 documents are proper. This case will move to Document Verification."
             : anyCorrection
             ? `Correction required for ${correctionDocuments.join(", ")}. Record the details; the case will remain here.`
             : "Upload each received document, enter its printed name, and complete the document check."}
@@ -318,7 +326,7 @@ export default function DocumentReceiveForm({ row, readOnly, onSubmit, onCancel 
         onCancel={onCancel}
         saving={saving}
         error={err}
-        submitLabel={allProper ? "Submit & send to Document Verification" : "Save correction required (hold)"}
+        submitLabel={allProper ? (returnsDirectlyToSource ? `Submit & return to ${STAGE_LABEL[row.issue.fromStep]}` : "Submit & send to Document Verification") : "Save correction required (hold)"}
       />
     </form>
   );

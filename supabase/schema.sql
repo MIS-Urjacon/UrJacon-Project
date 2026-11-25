@@ -361,3 +361,5 @@ create policy "urjacon anon read uploads"   on storage.objects for select to ano
   using (bucket_id = 'urjacon-uploads');
 create policy "urjacon anon insert uploads" on storage.objects for insert to anon
   with check (bucket_id = 'urjacon-uploads');
+
+-- Current uploads bucket "Urjacon PMSG" (private, created in the dashboard): run supabase/add_pmsg_bucket_policy.sql.

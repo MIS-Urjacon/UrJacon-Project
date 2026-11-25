@@ -1,6 +1,7 @@
 import { loadUpload } from "@/lib/db";
 
-const NAME_RE = /^[a-f0-9-]{36}\.(jpg|png|webp|gif|pdf)$/;
+// "<uuid>.ext" (older uploads) or "<Folder>/<uuid>.ext".
+const NAME_RE = /^([A-Za-z-]+\/)?[a-f0-9-]{36}\.(jpg|png|webp|gif|pdf)$/;
 const MIME = {
   jpg: "image/jpeg",
   png: "image/png",
@@ -10,7 +11,8 @@ const MIME = {
 };
 
 export async function GET(_request, { params }) {
-  const { name } = await params;
+  const { path } = await params;
+  const name = path.map(decodeURIComponent).join("/");
   if (!NAME_RE.test(name)) return new Response("Not found", { status: 404 });
   try {
     const buf = await loadUpload(name);

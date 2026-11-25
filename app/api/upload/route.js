@@ -10,6 +10,8 @@ const TYPES = {
   "application/pdf": "pdf",
 };
 const MAX = 5 * 1024 * 1024;
+// Folder per type of upload inside the bucket. Only these names are accepted.
+const FOLDERS = ["Leads", "Quotations", "Documents", "Site-Survey", "Issues", "Others"];
 
 export async function POST(request) {
   const form = await request.formData();
@@ -24,7 +26,9 @@ export async function POST(request) {
   if (file.size > MAX) {
     return NextResponse.json({ error: "File is larger than 5 MB" }, { status: 413 });
   }
-  const name = `${randomUUID()}.${ext}`;
+  const asked = String(form.get("folder") ?? "");
+  const folder = FOLDERS.includes(asked) ? asked : "Others";
+  const name = `${folder}/${randomUUID()}.${ext}`;
   try {
     await saveUpload(name, Buffer.from(await file.arrayBuffer()), file.type);
   } catch (e) {

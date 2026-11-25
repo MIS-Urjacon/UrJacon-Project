@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { UploadCloud, X, FileText, Loader2 } from "lucide-react";
 
 // Uploads to /api/upload and keeps a list of { url, name }.
-export default function FileUpload({ files = [], onChange, max = 1, readOnly = false, compact = false }) {
+export default function FileUpload({ files = [], onChange, max = 1, readOnly = false, compact = false, folder = "Others" }) {
   const ref = useRef(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -18,6 +18,7 @@ export default function FileUpload({ files = [], onChange, max = 1, readOnly = f
     for (const f of list) {
       const fd = new FormData();
       fd.append("file", f);
+      fd.append("folder", folder);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const j = await res.json();
       if (!res.ok) {

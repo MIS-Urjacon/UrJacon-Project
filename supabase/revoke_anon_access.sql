@@ -14,3 +14,5 @@ begin
 end $$;
 drop policy if exists "urjacon anon read uploads"   on storage.objects;
 drop policy if exists "urjacon anon insert uploads" on storage.objects;
+drop policy if exists "urjacon anon read pmsg"   on storage.objects;
+drop policy if exists "urjacon anon insert pmsg" on storage.objects;

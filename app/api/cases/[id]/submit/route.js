@@ -6,6 +6,7 @@ import { getSession } from "@/lib/session";
 import { canSubmitStep } from "@/lib/access";
 import { canSee, assigneeIds, NO_ASSIGNMENT } from "@/lib/assign";
 import { canSeeRecord } from "@/lib/defaultAssignees";
+import { documentIssueReturnStep } from "@/lib/issues";
 
 // Submit one pipeline step for a case. On success the case moves to the next
 // stage and the step's data is kept as that step's history.
@@ -66,8 +67,10 @@ export async function POST(request, { params }) {
   } else if (!result.hold) {
     // Actual Date for this step; Timestamp + Planned Date for the next one.
     let next = nextStage(step, row);
-    // Document Verification finished for a reported issue: resolve it and go back to the step it came from.
-    if (step === "nameCheck" && row.issue?.open) {
+    const issueReturnStep =
+      step === "documentReceive" ? documentIssueReturnStep(row.issue) : null;
+    // Resolve the issue at its required checkpoint and go back to the step it came from.
+    if ((step === "nameCheck" && row.issue?.open) || issueReturnStep) {
       next = row.issue.fromStep;
       const resolved = { ...row.issue, open: false, resolvedAt: now, resolvedBy: row.steps[step].submittedBy };
       row.issues = (row.issues ?? []).map((i) => (i.reportedAt === resolved.reportedAt ? resolved : i));
@@ -93,6 +96,29 @@ export async function POST(request, { params }) {
       fromLabel: STAGE_LABEL.login,
       type: "Login / PMSG problem",
       description: [`${saved.holdCode} · ${saved.holdReason}`, saved.remark, saved.retryDate ? `Retry on ${saved.retryDate}` : ""].filter(Boolean).join(" — "),
+      files: [],
+      reportedAt: now,
+      reportedBy: saved.submittedBy,
+    };
+    row.issue = issue;
+    row.issues = [...(row.issues ?? []), issue];
+    row.stage = "documentReceive";
+    if (assigneeIds(row).length) Object.assign(row, NO_ASSIGNMENT);
+    row.schedule = { ...row.schedule, documentReceive: newSchedule("documentReceive", now) };
+  }
+  // A rejected JE inspection or reverted portal approval goes back to Document Receive.
+  const RETURN_ISSUE = {
+    jeInspection: { type: "Site / technical issue", text: "JE rejected the site inspection" },
+    portalInspectionApproval: { type: "Portal / DISCOM issue", text: "Portal reverted the inspection" },
+  };
+  if (RETURN_ISSUE[step] && result.hold) {
+    const saved = row.steps[step];
+    const issue = {
+      open: true,
+      fromStep: step,
+      fromLabel: STAGE_LABEL[step],
+      type: RETURN_ISSUE[step].type,
+      description: `${RETURN_ISSUE[step].text} — ${saved.remark}`,
       files: [],
       reportedAt: now,
       reportedBy: saved.submittedBy,

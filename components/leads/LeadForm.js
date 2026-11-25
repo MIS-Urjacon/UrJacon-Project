@@ -260,6 +260,7 @@ function CameraDialog({ onClose, onDone }) {
     try {
       const body = new FormData();
       body.append("file", file);
+      body.append("folder", "Leads");
       const response = await fetch("/api/upload", { method: "POST", body });
       const data = await response.json();
       if (!response.ok) setError(data.error ?? "Photo could not be uploaded");

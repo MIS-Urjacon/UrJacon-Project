@@ -42,6 +42,7 @@ export default function StepPage({
   modalWidth,
   modalBodyClass,
   isPending, // optional: which cases are pending here (default: the case is at this stage)
+  showIssueTab = false, // split open issues into their own actionable queue
   extraTab, // optional: one more tab { key, label, Component } shown after History (Component gets { rows })
 }) {
   const [rows, setRows] = useState([]);
@@ -76,22 +77,26 @@ export default function StepPage({
   }, []);
 
   const entry = (r) => r.steps?.[stepKey];
-  const pending = useMemo(
+  const waiting = useMemo(
     () => rows.filter((r) => (isPending ? isPending(r) : r.stage === stepKey)).sort((a, b) => (b.schedule?.[stepKey]?.timestamp || b.timestamp).localeCompare(a.schedule?.[stepKey]?.timestamp || a.timestamp)),
     [rows, stepKey, isPending]
   );
+  const pending = showIssueTab ? waiting.filter((r) => !r.issue?.open) : waiting;
+  const issueData = showIssueTab ? waiting.filter((r) => r.issue?.open) : [];
   const history = useMemo(
     () =>
       rows
-        .filter((r) => r.steps?.[stepKey]?.status === "done")
+        .filter((r) => r.steps?.[stepKey]?.status === "done" && !(showIssueTab && r.stage === stepKey && r.issue?.open))
         .sort((a, b) => r_sub(b).localeCompare(r_sub(a))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, stepKey]
+    [rows, stepKey, showIssueTab]
   );
   function r_sub(r) {
     return r.steps[stepKey].submittedAt;
   }
-  const tabRows = tab === "pending" ? pending : history;
+  const isIssueTab = tab === "issues";
+  const isWorkTab = tab === "pending" || isIssueTab;
+  const tabRows = isIssueTab ? issueData : tab === "pending" ? pending : history;
   const list = filters.apply(tabRows).filter((r) => matchesQuery(r, q));
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const cur = Math.min(page, pages);
@@ -101,7 +106,7 @@ export default function StepPage({
   // Report Issue exists on every step after Document Verification; ticking rows offers it (and Assign).
   const hasReport = stepKey !== "nameCheck" && stepKey !== "documentReceive";
   const showBoxes = canBulk || hasReport;
-  const sel = useSelection(tab === "pending" ? shown : []);
+  const sel = useSelection(isWorkTab ? shown : []);
 
   function notify(msg) {
     setToast(msg);
@@ -119,7 +124,7 @@ export default function StepPage({
     setModal(null);
     notify(
       j.stage === stepKey
-        ? "Saved on hold. The case stays in Pending."
+        ? `Saved on hold. The case stays in ${isIssueTab ? "Issue data" : "Pending"}.`
         : stepKey === "siteSurvey" && j.steps?.siteSurvey?.status === "done" && j.stage !== "siteSurvey" && j.stage !== "done"
         ? `Survey completed. The case continues at ${STAGE_LABEL[j.stage]}.`
         : `Submitted. Moved to ${STAGE_LABEL[j.stage]}.`
@@ -154,6 +159,7 @@ export default function StepPage({
 
   const tabs = [
     ["pending", "Pending", pending.length],
+    ...(showIssueTab ? [["issues", "Issue data", issueData.length]] : []),
     ["history", "History", history.length],
     ...(extraTab ? [[extraTab.key, extraTab.label, null]] : []),
   ];
@@ -175,6 +181,7 @@ export default function StepPage({
               onClick={() => {
                 setTab(k);
                 setPage(1);
+                sel.clear();
               }}
               className={`-mb-px flex items-center gap-2 border-b-2 py-4 text-sm font-semibold transition ${
                 tab === k
@@ -235,7 +242,7 @@ export default function StepPage({
           <table className="w-full min-w-[900px] border-separate border-spacing-0 text-left text-[13px]">
             <thead>
               <tr className="bg-slate-50 text-slate-500">
-                {tab === "pending" && (
+                {isWorkTab && (
                   <th className={`${th} sticky left-0 z-10 bg-slate-50 text-center shadow-[8px_0_8px_-8px_rgba(15,23,42,0.12)]`}>
                     <div className="flex items-center justify-center gap-2.5">
                       {showBoxes && <SelectAllBox sel={sel} />}
@@ -276,7 +283,7 @@ export default function StepPage({
                   const sch = r.schedule?.[stepKey];
                   return (
                     <tr key={r.id} className="group transition hover:bg-slate-50/70">
-                      {tab === "pending" && (
+                      {isWorkTab && (
                         <td className="sticky left-0 z-10 border-t border-slate-100 bg-white px-2.5 py-3.5 text-center shadow-[8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50">
                           <div className="flex items-center justify-center gap-2.5">
                             {showBoxes && <RowBox sel={sel} row={r} />}
@@ -333,11 +340,13 @@ export default function StepPage({
             <div className="flex flex-col items-center gap-2 py-16 text-slate-400">
               <Inbox size={32} />
               <div className="font-medium text-slate-600">
-                {filters.count || q ? "No matching cases" : tab === "pending" ? "No pending cases" : "No history yet"}
+                {filters.count || q ? "No matching cases" : isIssueTab ? "No open issues" : tab === "pending" ? "No pending cases" : "No history yet"}
               </div>
               <div className="text-sm">
                 {filters.count || q
                   ? "Change or clear the search and filters."
+                  : isIssueTab
+                  ? "Cases sent to Document Receive with an open issue appear here."
                   : tab === "pending"
                   ? "New cases appear here when the previous step is submitted."
                   : "Submitted cases will show up here."}

@@ -117,7 +117,7 @@ export default function SiteSurveyForm({ row, readOnly, onSubmit, onCancel }) {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <Label required>Survey Photos (PDF / images)</Label>
-            <FileUpload files={f.photoPdf} onChange={(files) => set("photoPdf", files)} max={5} readOnly={readOnly} compact />
+            <FileUpload files={f.photoPdf} onChange={(files) => set("photoPdf", files)} max={5} readOnly={readOnly} compact folder="Site-Survey" />
             <p className="mt-1 text-xs text-slate-400">One PDF or up to 5 images (JPG, PNG, WEBP), each up to 5 MB.</p>
           </div>
           <label className="block sm:col-span-2"><Label required>Surveyor Remarks</Label><textarea rows={3} className="field !h-auto py-2.5" required value={f.surveyorRemarks} onChange={(e) => set("surveyorRemarks", e.target.value)} /></label>
